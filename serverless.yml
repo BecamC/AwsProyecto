@@ -1,0 +1,371 @@
+service: pardo-pedidos-system
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  memorySize: 1024
+  timeout: 29
+  region: us-east-1
+  stage: ${opt:stage, 'dev'}
+  environment:
+    STAGE: ${self:provider.stage}
+    REGION: ${self:provider.region}
+    TABLA_PRODUCTOS: ${self:custom.tablas.productos}
+    TABLA_PEDIDOS: ${self:custom.tablas.pedidos}
+    TABLA_INVENTARIO: ${self:custom.tablas.inventario}
+    TABLA_LOGS: ${self:custom.tablas.logs}
+    SQS_PEDIDOS_URL:
+      Ref: ColaPedidos
+    SNS_NOTIFICACIONES_ARN:
+      Ref: TopicNotificaciones
+    STEP_FUNCTIONS_ARN:
+      Ref: FlujoProcesarPedido
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:BatchGetItem
+            - dynamodb:BatchWriteItem
+            - dynamodb:DeleteItem
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:UpdateItem
+          Resource:
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tablas.productos}
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tablas.pedidos}
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tablas.inventario}
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tablas.logs}
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tablas.productos}/index/*
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tablas.pedidos}/index/*
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tablas.logs}/index/*
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+          Resource:
+            - arn:aws:sqs:${self:provider.region}:*:${self:custom.sqsQueueName}
+        - Effect: Allow
+          Action:
+            - sns:Publish
+          Resource:
+            - arn:aws:sns:${self:provider.region}:*:${self:custom.snsTopicName}
+        - Effect: Allow
+          Action:
+            - states:StartExecution
+            - states:SendTaskSuccess
+            - states:SendTaskFailure
+            - states:DescribeExecution
+          Resource:
+            - arn:aws:states:${self:provider.region}:*:stateMachine:${self:custom.stepFunctionsName}
+        - Effect: Allow
+          Action:
+            - events:PutEvents
+          Resource: '*'
+
+custom:
+  tablas:
+    productos: TablaProductos-${self:provider.stage}
+    pedidos: TablaPedidos-${self:provider.stage}
+    inventario: TablaInventario-${self:provider.stage}
+    logs: TablaLogs-${self:provider.stage}
+  snsTopicName: pardo-notificaciones-${self:provider.stage}
+  sqsQueueName: cola-pedidos-${self:provider.stage}
+  snsTopicArn:
+    Ref: TopicNotificaciones
+  sqsQueueUrl:
+    Ref: ColaPedidos
+  stepFunctionsName: FlujoProcesarPedido-${self:provider.stage}
+
+functions:
+  obtenerProductos:
+    handler: handlers/productos/obtenerProductos.handler
+    events:
+      - http:
+          path: producto/obtener
+          method: get
+          cors: true
+
+  obtenerProducto:
+    handler: handlers/productos/obtenerProducto.handler
+    events:
+      - http:
+          path: producto/{producto_id}
+          method: get
+          cors: true
+
+  crearPedido:
+    handler: handlers/pedidos/crearPedido.handler
+    events:
+      - http:
+          path: pedido/crear
+          method: post
+          cors: true
+
+  procesarEventosPedido:
+    handler: handlers/pedidos/procesarEventoPedido.handler
+    events:
+      - sqs:
+          arn:
+            Fn::GetAtt:
+              - ColaPedidos
+              - Arn
+
+  actualizarPedido:
+    handler: handlers/pedidos/actualizarPedido.handler
+    events:
+      - http:
+          path: pedido/{pedido_id}
+          method: put
+          cors: true
+
+  consultarPedido:
+    handler: handlers/pedidos/consultarPedido.handler
+    events:
+      - http:
+          path: pedido/consultar
+          method: get
+          cors: true
+
+  consultarInventario:
+    handler: handlers/inventario/consultarInventario.handler
+    events:
+      - http:
+          path: inventario/consultar
+          method: get
+          cors: true
+
+  actualizarInventario:
+    handler: handlers/inventario/actualizarInventario.handler
+    events:
+      - eventBridge:
+          pattern:
+            source:
+              - pedidos.microservicio
+            detail-type:
+              - Pedido Creado
+
+  preparandoComida:
+    handler: handlers/workflow/preparandoComida.handler
+    events:
+      - eventBridge:
+          pattern:
+            source:
+              - stepfunctions.workflow
+            detail-type:
+              - Preparando Comida
+
+  chefConfirma:
+    handler: handlers/workflow/chefConfirma.handler
+    events:
+      - http:
+          path: chef/confirma
+          method: post
+          cors: true
+
+  despachandoComida:
+    handler: handlers/workflow/despachandoComida.handler
+    events:
+      - eventBridge:
+          pattern:
+            source:
+              - stepfunctions.workflow
+            detail-type:
+              - Despachando Comida
+
+  pedidoDespachado:
+    handler: handlers/workflow/pedidoDespachado.handler
+    events:
+      - http:
+          path: despachado/confirma
+          method: post
+          cors: true
+
+  recogidaDelivery:
+    handler: handlers/workflow/recogidaDelivery.handler
+    events:
+      - eventBridge:
+          pattern:
+            source:
+              - stepfunctions.workflow
+            detail-type:
+              - Recogida Delivery
+
+  pedidoRecogido:
+    handler: handlers/workflow/pedidoRecogido.handler
+    events:
+      - http:
+          path: motorizado/confirma
+          method: post
+          cors: true
+
+  pedidoEnCamino:
+    handler: handlers/workflow/pedidoEnCamino.handler
+
+  clienteRecibeComida:
+    handler: handlers/workflow/clienteRecibeComida.handler
+
+resources:
+  Resources:
+    TablaProductos:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.tablas.productos}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: tenant_id
+            AttributeType: S
+          - AttributeName: producto_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: tenant_id
+            KeyType: HASH
+          - AttributeName: producto_id
+            KeyType: RANGE
+
+    TablaPedidos:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.tablas.pedidos}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: tenant_id
+            AttributeType: S
+          - AttributeName: pedido_id
+            AttributeType: S
+          - AttributeName: user_id
+            AttributeType: S
+          - AttributeName: fecha_inicio
+            AttributeType: S
+        KeySchema:
+          - AttributeName: tenant_id
+            KeyType: HASH
+          - AttributeName: pedido_id
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: user_id-index
+            KeySchema:
+              - AttributeName: user_id
+                KeyType: HASH
+              - AttributeName: fecha_inicio
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
+
+    TablaInventario:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.tablas.inventario}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: tenant_id
+            AttributeType: S
+          - AttributeName: producto_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: tenant_id
+            KeyType: HASH
+          - AttributeName: producto_id
+            KeyType: RANGE
+
+    TablaLogs:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.tablas.logs}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: log_id
+            AttributeType: S
+          - AttributeName: user_id
+            AttributeType: S
+          - AttributeName: horario
+            AttributeType: S
+        KeySchema:
+          - AttributeName: log_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: user_id-index
+            KeySchema:
+              - AttributeName: user_id
+                KeyType: HASH
+              - AttributeName: horario
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
+    TopicNotificaciones:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: ${self:custom.snsTopicName}
+
+    ColaPedidos:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:custom.sqsQueueName}
+
+    FlujoProcesarPedido:
+      Type: AWS::StepFunctions::StateMachine
+      Properties:
+        StateMachineName: ${self:custom.stepFunctionsName}
+        RoleArn: arn:aws:iam::${aws:accountId}:role/LabRole
+        DefinitionString:
+          Fn::Sub: |
+            {
+              "Comment": "Flujo principal para procesar pedidos",
+              "StartAt": "PreguntarAlChef",
+              "States": {
+                "PreguntarAlChef": {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+                  "Parameters": {
+                    "FunctionName": "${ChefConfirmaLambdaFunction.Arn}",
+                    "Payload": {
+                      "taskToken.$": "$$.Task.Token",
+                      "pedido_id.$": "$.pedido_id",
+                      "tenant_id.$": "$.tenant_id"
+                    }
+                  },
+                  "Next": "DespachandoComida"
+                },
+                "DespachandoComida": {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+                  "Parameters": {
+                    "FunctionName": "${PedidoDespachadoLambdaFunction.Arn}",
+                    "Payload": {
+                      "taskToken.$": "$$.Task.Token",
+                      "pedido_id.$": "$.pedido_id",
+                      "tenant_id.$": "$.tenant_id"
+                    }
+                  },
+                  "Next": "RecogidaDelivery"
+                },
+                "RecogidaDelivery": {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+                  "Parameters": {
+                    "FunctionName": "${PedidoRecogidoLambdaFunction.Arn}",
+                    "Payload": {
+                      "taskToken.$": "$$.Task.Token",
+                      "pedido_id.$": "$.pedido_id",
+                      "tenant_id.$": "$.tenant_id"
+                    }
+                  },
+                  "Next": "ClienteRecibeComida"
+                },
+                "ClienteRecibeComida": {
+                  "Type": "Task",
+                  "Resource": "${ClienteRecibeComidaLambdaFunction.Arn}",
+                  "End": true
+                }
+              }
+            }
+

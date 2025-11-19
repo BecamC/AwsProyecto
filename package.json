@@ -1,0 +1,22 @@
+{
+  "name": "pardo-pedidos-system",
+  "version": "1.0.0",
+  "description": "Sistema serverless para gestión de pedidos de Pardo (microservicios de productos, pedidos e inventario).",
+  "scripts": {
+    "lint": "echo \"No lint configured\""
+  },
+  "dependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.490.0",
+    "@aws-sdk/client-dynamodb": "^3.490.0",
+    "@aws-sdk/client-eventbridge": "^3.490.0",
+    "@aws-sdk/client-s3": "^3.490.0",
+    "@aws-sdk/client-sfn": "^3.490.0",
+    "@aws-sdk/client-sns": "^3.490.0",
+    "@aws-sdk/client-sqs": "^3.490.0",
+    "@aws-sdk/lib-dynamodb": "^3.490.0"
+  },
+  "devDependencies": {
+    "serverless": "^3.38.0"
+  }
+}
+
