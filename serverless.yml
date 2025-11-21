@@ -66,7 +66,14 @@ functions:
       - http:
           path: producto/obtener
           method: get
-          cors: true
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-tenant-id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
 
   obtenerProducto:
     handler: handlers/productos/obtenerProducto.handler
@@ -74,7 +81,14 @@ functions:
       - http:
           path: producto/{producto_id}
           method: get
-          cors: true
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-tenant-id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
 
   crearProducto:
     handler: handlers/productos/crearProducto.handler
@@ -82,7 +96,14 @@ functions:
       - http:
           path: producto
           method: post
-          cors: true
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-tenant-id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
 
   actualizarProducto:
     handler: handlers/productos/actualizarProducto.handler
@@ -90,7 +111,14 @@ functions:
       - http:
           path: producto/{producto_id}
           method: put
-          cors: true
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-tenant-id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
 
   eliminarProducto:
     handler: handlers/productos/eliminarProducto.handler
@@ -98,7 +126,14 @@ functions:
       - http:
           path: producto/{producto_id}
           method: delete
-          cors: true
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-tenant-id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
 
   crearPedido:
     handler: handlers/pedidos/crearPedido.handler
@@ -106,7 +141,14 @@ functions:
       - http:
           path: pedido/crear
           method: post
-          cors: true
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-tenant-id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
 
   procesarEventosPedido:
     handler: handlers/pedidos/procesarEventoPedido.handler
@@ -123,7 +165,14 @@ functions:
       - http:
           path: pedido/{pedido_id}
           method: put
-          cors: true
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-tenant-id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
 
   consultarPedido:
     handler: handlers/pedidos/consultarPedido.handler
@@ -131,7 +180,14 @@ functions:
       - http:
           path: pedido/consultar
           method: get
-          cors: true
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-tenant-id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
 
   consultarInventario:
     handler: handlers/inventario/consultarInventario.handler
@@ -139,7 +195,14 @@ functions:
       - http:
           path: inventario/consultar
           method: post
-          cors: true
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-tenant-id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
 
   ajustarInventario:
     handler: handlers/inventario/ajustarInventario.handler
@@ -147,7 +210,14 @@ functions:
       - http:
           path: inventario/ajustar
           method: post
-          cors: true
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-tenant-id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
 
   actualizarInventario:
     handler: handlers/inventario/actualizarInventario.handler
@@ -175,7 +245,14 @@ functions:
       - http:
           path: chef/confirma
           method: post
-          cors: true
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-tenant-id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
 
   despachandoComida:
     handler: handlers/workflow/despachandoComida.handler
@@ -193,7 +270,14 @@ functions:
       - http:
           path: despachado/confirma
           method: post
-          cors: true
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-tenant-id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
 
   recogidaDelivery:
     handler: handlers/workflow/recogidaDelivery.handler
@@ -211,7 +295,14 @@ functions:
       - http:
           path: motorizado/confirma
           method: post
-          cors: true
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-tenant-id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
 
   pedidoEnCamino:
     handler: handlers/workflow/pedidoEnCamino.handler
