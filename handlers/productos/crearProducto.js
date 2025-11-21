@@ -3,6 +3,7 @@ const { response } = require('../../shared/response');
 const { validateProducto } = require('../../shared/validations');
 
 const TABLA_PRODUCTOS = process.env.TABLA_PRODUCTOS;
+const TABLA_INVENTARIO = process.env.TABLA_INVENTARIO;
 
 exports.handler = async (event) => {
   try {
@@ -15,8 +16,13 @@ exports.handler = async (event) => {
     const body = JSON.parse(event.body || '{}');
     body.tenant_id = tenantId;
 
-    // Validar datos
-    const validation = validateProducto(body);
+    // Convertir precio_producto a número si viene como string
+    if (body.precio_producto && typeof body.precio_producto === 'string') {
+      body.precio_producto = parseFloat(body.precio_producto);
+    }
+
+    // Validar datos (isUpdate = false porque es creación)
+    const validation = validateProducto(body, false);
     if (!validation.isValid) {
       return response(400, { 
         message: 'Datos inválidos',
@@ -42,13 +48,28 @@ exports.handler = async (event) => {
     // Guardar producto
     await putItem(TABLA_PRODUCTOS, body);
 
+    // Inicializar inventario para el nuevo producto
+    const inventarioItem = {
+      tenant_id: tenantId,
+      producto_id: body.producto_id,
+      stock_actual: body.stock || 0,
+      stock_minimo: body.stock_minimo || 0,
+      stock_maximo: body.stock_maximo || 9999,
+      ultima_actualizacion: now,
+    };
+    await putItem(TABLA_INVENTARIO, inventarioItem);
+
     return response(201, { 
       message: 'Producto creado exitosamente',
       producto: body 
     });
   } catch (error) {
     console.error('Error creando producto', error);
-    return response(500, { message: 'Error interno al crear producto' });
+    return response(500, { 
+      message: 'Error interno al crear producto',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 };
 

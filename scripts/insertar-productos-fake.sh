@@ -21,7 +21,9 @@ post_producto() {
     local imagen_url=$6
     local combo_items=$7
     
-    local body=$(cat <<EOF
+    local body
+    if [ -z "$combo_items" ]; then
+        body=$(cat <<EOF
 {
   "nombre_producto": "$nombre",
   "tipo_producto": "$tipo",
@@ -29,10 +31,25 @@ post_producto() {
   "precio_producto": "$precio",
   "currency": "PEN",
   "is_active": true,
-  "image_url": "$imagen_url"$combo_items
+  "image_url": "$imagen_url"
 }
 EOF
 )
+    else
+        body=$(cat <<EOF
+{
+  "nombre_producto": "$nombre",
+  "tipo_producto": "$tipo",
+  "descripcion_producto": "$descripcion",
+  "precio_producto": "$precio",
+  "currency": "PEN",
+  "is_active": true,
+  "image_url": "$imagen_url",
+$combo_items
+}
+EOF
+)
+    fi
     
     echo "📦 Creando: $nombre"
     response=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/producto" \
@@ -129,26 +146,28 @@ post_producto \
 # Productos combo
 echo ""
 echo "=== Creando combos ==="
-
-# Primero necesitamos obtener los IDs de los productos creados
-# Por simplicidad, usaremos UUIDs de ejemplo
-# En producción, deberías obtener los IDs reales de la respuesta
-
-COMBO_ITEMS_HAMBURGUESA='",
-  "combo_items": [
-    {"product_id": "producto-hamburguesa-id", "sku": "HAMB-001", "quantity": 1},
-    {"product_id": "producto-papas-id", "sku": "PAP-001", "quantity": 1},
-    {"product_id": "producto-bebida-id", "sku": "BEB-001", "quantity": 1}
-  ]'
-
-post_producto \
-    "Combo Hamburguesa Clásica" \
-    "combo" \
-    "Hamburguesa clásica + Papas fritas + Bebida 500ml" \
-    "25.00" \
-    "combos" \
-    "https://example.com/images/combo-hamburguesa.jpg" \
-    "$COMBO_ITEMS_HAMBURGUESA"
+echo "⚠️  NOTA: Los combos requieren IDs reales de productos."
+echo "   Para crear un combo, primero crea los productos individuales,"
+echo "   obtén sus IDs, y luego crea el combo con esos IDs."
+echo ""
+echo "   Ejemplo de creación manual de combo:"
+echo "   curl -X POST '$BASE_URL/producto' \\"
+echo "     -H 'Content-Type: application/json' \\"
+echo "     -H 'x-tenant-id: $TENANT_ID' \\"
+echo "     -d '{"
+echo "       \"nombre_producto\": \"Combo Hamburguesa Clásica\","
+echo "       \"tipo_producto\": \"combo\","
+echo "       \"descripcion_producto\": \"Hamburguesa + Papas + Bebida\","
+echo "       \"precio_producto\": \"25.00\","
+echo "       \"currency\": \"PEN\","
+echo "       \"is_active\": true,"
+echo "       \"combo_items\": ["
+echo "         {\"product_id\": \"ID_REAL_1\", \"sku\": \"HAMB-001\", \"quantity\": 1},"
+echo "         {\"product_id\": \"ID_REAL_2\", \"sku\": \"PAP-001\", \"quantity\": 1},"
+echo "         {\"product_id\": \"ID_REAL_3\", \"sku\": \"BEB-001\", \"quantity\": 1}"
+echo "       ]"
+echo "     }'"
+echo ""
 
 # Productos promoción
 echo ""
