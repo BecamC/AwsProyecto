@@ -76,6 +76,30 @@ functions:
           method: get
           cors: true
 
+  crearProducto:
+    handler: handlers/productos/crearProducto.handler
+    events:
+      - http:
+          path: producto
+          method: post
+          cors: true
+
+  actualizarProducto:
+    handler: handlers/productos/actualizarProducto.handler
+    events:
+      - http:
+          path: producto/{producto_id}
+          method: put
+          cors: true
+
+  eliminarProducto:
+    handler: handlers/productos/eliminarProducto.handler
+    events:
+      - http:
+          path: producto/{producto_id}
+          method: delete
+          cors: true
+
   crearPedido:
     handler: handlers/pedidos/crearPedido.handler
     events:
@@ -114,7 +138,15 @@ functions:
     events:
       - http:
           path: inventario/consultar
-          method: get
+          method: post
+          cors: true
+
+  ajustarInventario:
+    handler: handlers/inventario/ajustarInventario.handler
+    events:
+      - http:
+          path: inventario/ajustar
+          method: post
           cors: true
 
   actualizarInventario:
