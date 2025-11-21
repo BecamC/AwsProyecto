@@ -20,51 +20,7 @@ provider:
     SNS_NOTIFICACIONES_ARN: ${self:custom.snsTopicArn}
     STEP_FUNCTIONS_ARN: ${self:custom.stepFunctionsArn}
   iam:
-    role:
-      statements:
-        - Effect: Allow
-          Action:
-            - dynamodb:BatchGetItem
-            - dynamodb:BatchWriteItem
-            - dynamodb:DeleteItem
-            - dynamodb:GetItem
-            - dynamodb:PutItem
-            - dynamodb:Query
-            - dynamodb:Scan
-            - dynamodb:UpdateItem
-          Resource:
-            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tablas.productos}
-            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tablas.pedidos}
-            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tablas.inventario}
-            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tablas.logs}
-            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tablas.productos}/index/*
-            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tablas.pedidos}/index/*
-            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tablas.logs}/index/*
-        - Effect: Allow
-          Action:
-            - sqs:SendMessage
-            - sqs:ReceiveMessage
-            - sqs:DeleteMessage
-            - sqs:GetQueueAttributes
-          Resource:
-            - arn:aws:sqs:${self:provider.region}:*:${self:custom.sqsQueueName}
-        - Effect: Allow
-          Action:
-            - sns:Publish
-          Resource:
-            - arn:aws:sns:${self:provider.region}:*:${self:custom.snsTopicName}
-        - Effect: Allow
-          Action:
-            - states:StartExecution
-            - states:SendTaskSuccess
-            - states:SendTaskFailure
-            - states:DescribeExecution
-          Resource:
-            - arn:aws:states:${self:provider.region}:*:stateMachine:${self:custom.stepFunctionsName}
-        - Effect: Allow
-          Action:
-            - events:PutEvents
-          Resource: '*'
+    role: arn:aws:iam::079902990209:role/LabRole
 
 custom:
   tablas:
