@@ -16,12 +16,9 @@ provider:
     TABLA_PEDIDOS: ${self:custom.tablas.pedidos}
     TABLA_INVENTARIO: ${self:custom.tablas.inventario}
     TABLA_LOGS: ${self:custom.tablas.logs}
-    SQS_PEDIDOS_URL:
-      Ref: ColaPedidos
-    SNS_NOTIFICACIONES_ARN:
-      Ref: TopicNotificaciones
-    STEP_FUNCTIONS_ARN:
-      Ref: FlujoProcesarPedido
+    SQS_PEDIDOS_URL: ${self:custom.sqsQueueUrl}
+    SNS_NOTIFICACIONES_ARN: ${self:custom.snsTopicArn}
+    STEP_FUNCTIONS_ARN: ${self:custom.stepFunctionsArn}
   iam:
     role:
       statements:
@@ -77,11 +74,34 @@ custom:
     logs: TablaLogs-${self:provider.stage}
   snsTopicName: pardo-notificaciones-${self:provider.stage}
   sqsQueueName: cola-pedidos-${self:provider.stage}
-  snsTopicArn:
-    Ref: TopicNotificaciones
-  sqsQueueUrl:
-    Ref: ColaPedidos
   stepFunctionsName: FlujoProcesarPedido-${self:provider.stage}
+  snsTopicArn:
+    Fn::Join:
+      - ''
+      - - 'arn:aws:sns:'
+        - ${self:provider.region}
+        - ':'
+        - ${aws:accountId}
+        - ':'
+        - ${self:custom.snsTopicName}
+  sqsQueueUrl:
+    Fn::Join:
+      - ''
+      - - 'https://sqs.'
+        - ${self:provider.region}
+        - '.amazonaws.com/'
+        - ${aws:accountId}
+        - '/'
+        - ${self:custom.sqsQueueName}
+  stepFunctionsArn:
+    Fn::Join:
+      - ''
+      - - 'arn:aws:states:'
+        - ${self:provider.region}
+        - ':'
+        - ${aws:accountId}
+        - ':stateMachine:'
+        - ${self:custom.stepFunctionsName}
 
 functions:
   obtenerProductos:
@@ -313,59 +333,149 @@ resources:
 
     FlujoProcesarPedido:
       Type: AWS::StepFunctions::StateMachine
+      DependsOn:
+        - ChefConfirmaLambdaFunction
+        - PedidoDespachadoLambdaFunction
+        - PedidoRecogidoLambdaFunction
+        - ClienteRecibeComidaLambdaFunction
       Properties:
         StateMachineName: ${self:custom.stepFunctionsName}
         RoleArn: arn:aws:iam::${aws:accountId}:role/LabRole
         DefinitionString:
-          Fn::Sub: |
-            {
-              "Comment": "Flujo principal para procesar pedidos",
-              "StartAt": "PreguntarAlChef",
-              "States": {
-                "PreguntarAlChef": {
-                  "Type": "Task",
-                  "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
-                  "Parameters": {
-                    "FunctionName": "${ChefConfirmaLambdaFunction.Arn}",
-                    "Payload": {
-                      "taskToken.$": "$$.Task.Token",
-                      "pedido_id.$": "$.pedido_id",
-                      "tenant_id.$": "$.tenant_id"
-                    }
+          Fn::Sub:
+            - |
+              {
+                "Comment": "Flujo principal para procesar pedidos",
+                "StartAt": "PreguntarAlChef",
+                "States": {
+                  "PreguntarAlChef": {
+                    "Type": "Task",
+                    "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+                    "Parameters": {
+                      "FunctionName": "${ChefConfirmaArn}",
+                      "Payload": {
+                        "taskToken.$": "$$.Task.Token",
+                        "pedido_id.$": "$.pedido_id",
+                        "tenant_id.$": "$.tenant_id"
+                      }
+                    },
+                    "Next": "DespachandoComida"
                   },
-                  "Next": "DespachandoComida"
-                },
-                "DespachandoComida": {
-                  "Type": "Task",
-                  "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
-                  "Parameters": {
-                    "FunctionName": "${PedidoDespachadoLambdaFunction.Arn}",
-                    "Payload": {
-                      "taskToken.$": "$$.Task.Token",
-                      "pedido_id.$": "$.pedido_id",
-                      "tenant_id.$": "$.tenant_id"
-                    }
+                  "DespachandoComida": {
+                    "Type": "Task",
+                    "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+                    "Parameters": {
+                      "FunctionName": "${PedidoDespachadoArn}",
+                      "Payload": {
+                        "taskToken.$": "$$.Task.Token",
+                        "pedido_id.$": "$.pedido_id",
+                        "tenant_id.$": "$.tenant_id"
+                      }
+                    },
+                    "Next": "RecogidaDelivery"
                   },
-                  "Next": "RecogidaDelivery"
-                },
-                "RecogidaDelivery": {
-                  "Type": "Task",
-                  "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
-                  "Parameters": {
-                    "FunctionName": "${PedidoRecogidoLambdaFunction.Arn}",
-                    "Payload": {
-                      "taskToken.$": "$$.Task.Token",
-                      "pedido_id.$": "$.pedido_id",
-                      "tenant_id.$": "$.tenant_id"
-                    }
+                  "RecogidaDelivery": {
+                    "Type": "Task",
+                    "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+                    "Parameters": {
+                      "FunctionName": "${PedidoRecogidoArn}",
+                      "Payload": {
+                        "taskToken.$": "$$.Task.Token",
+                        "pedido_id.$": "$.pedido_id",
+                        "tenant_id.$": "$.tenant_id"
+                      }
+                    },
+                    "Next": "ClienteRecibeComida"
                   },
-                  "Next": "ClienteRecibeComida"
-                },
-                "ClienteRecibeComida": {
-                  "Type": "Task",
-                  "Resource": "${ClienteRecibeComidaLambdaFunction.Arn}",
-                  "End": true
+                  "ClienteRecibeComida": {
+                    "Type": "Task",
+                    "Resource": "${ClienteRecibeComidaArn}",
+                    "End": true
+                  }
                 }
               }
-            }
+            - ChefConfirmaArn:
+                Fn::GetAtt:
+                  - ChefConfirmaLambdaFunction
+                  - Arn
+              PedidoDespachadoArn:
+                Fn::GetAtt:
+                  - PedidoDespachadoLambdaFunction
+                  - Arn
+              PedidoRecogidoArn:
+                Fn::GetAtt:
+                  - PedidoRecogidoLambdaFunction
+                  - Arn
+              ClienteRecibeComidaArn:
+                Fn::GetAtt:
+                  - ClienteRecibeComidaLambdaFunction
+                  - Arn
+
+  Outputs:
+    ApiGatewayRestApiId:
+      Value:
+        Ref: ApiGatewayRestApi
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ApiGatewayRestApiId
+    ApiGatewayRestApiUrl:
+      Value:
+        Fn::Join:
+          - ''
+          - - 'https://'
+            - Ref: ApiGatewayRestApi
+            - '.execute-api.'
+            - ${self:provider.region}
+            - '.amazonaws.com/'
+            - ${self:provider.stage}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ApiGatewayRestApiUrl
+    TablaProductosArn:
+      Value:
+        Fn::GetAtt:
+          - TablaProductos
+          - Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-TablaProductosArn
+    TablaPedidosArn:
+      Value:
+        Fn::GetAtt:
+          - TablaPedidos
+          - Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-TablaPedidosArn
+    TablaInventarioArn:
+      Value:
+        Fn::GetAtt:
+          - TablaInventario
+          - Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-TablaInventarioArn
+    SnsTopicArn:
+      Value:
+        Fn::Join:
+          - ''
+          - - 'arn:aws:sns:'
+            - ${self:provider.region}
+            - ':'
+            - ${aws:accountId}
+            - ':'
+            - ${self:custom.snsTopicName}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-SnsTopicArn
+    SqsQueueUrl:
+      Value: ${self:custom.sqsQueueUrl}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-SqsQueueUrl
+    StepFunctionsArn:
+      Value:
+        Fn::Join:
+          - ''
+          - - 'arn:aws:states:'
+            - ${self:provider.region}
+            - ':'
+            - ${aws:accountId}
+            - ':stateMachine:'
+            - ${self:custom.stepFunctionsName}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-StepFunctionsArn
 
