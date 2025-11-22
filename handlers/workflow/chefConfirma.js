@@ -116,6 +116,7 @@ async function handleHttpInvocation(event) {
   await sendTaskSuccess({
     taskToken: pedido.chef_task_token,
     output: {
+      tenant_id: tenantId,
       pedido_id: pedidoId,
       estado: 'rechazado',
     },
@@ -137,15 +138,22 @@ async function handleHttpInvocation(event) {
   console.log('[INFO] Enviando sendTaskSuccess a Step Functions...');
   console.log('[DEBUG] TaskToken (primeros 50 chars):', pedido.chef_task_token?.substring(0, 50));
   
+  // El output debe incluir tenant_id para que el siguiente estado pueda acceder a él
+  const taskOutput = {
+    tenant_id: tenantId,
+    pedido_id: pedidoId,
+    estado: 'preparando',
+  };
+  
+  console.log('[DEBUG] Output que se enviará a Step Functions:', JSON.stringify(taskOutput));
+  
   try {
     await sendTaskSuccess({
       taskToken: pedido.chef_task_token,
-      output: {
-        pedido_id: pedidoId,
-        estado: 'preparando',
-      },
+      output: taskOutput,
     });
     console.log('[SUCCESS] sendTaskSuccess ejecutado correctamente. Step Functions debería avanzar ahora.');
+    console.log('[DEBUG] Step Functions debería invocar pedidoDespachado en breve...');
   } catch (error) {
     console.error('[ERROR] Error al ejecutar sendTaskSuccess:', error);
     console.error('[ERROR] Stack:', error.stack);

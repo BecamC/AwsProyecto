@@ -46,6 +46,7 @@ async function handleHttpInvocation(event) {
   await sendTaskSuccess({
     taskToken: pedido.delivery_task_token,
     output: {
+      tenant_id: tenantId,
       pedido_id: pedidoId,
       estado: 'en_camino',
     },
