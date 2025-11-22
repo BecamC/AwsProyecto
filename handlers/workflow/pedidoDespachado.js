@@ -3,6 +3,7 @@ const { response } = require('../../shared/response');
 const { sendTaskSuccess } = require('../../shared/stepfunctions');
 const { publish, buildNotificationAttributes } = require('../../shared/sns');
 const { registrarLog } = require('../../shared/logs');
+const { putEvent } = require('../../shared/eventbridge');
 
 const TABLA_PEDIDOS = process.env.TABLA_PEDIDOS;
 const SNS_TOPIC_ARN = process.env.SNS_NOTIFICACIONES_ARN;
@@ -80,6 +81,19 @@ async function handleHttpInvocation(event) {
     userId: body.usuario_id,
     actionType: 'pedido_despachado',
     pedidoId,
+  });
+
+  // Emitir evento para que el Step Functions continúe
+  // Esto activará el handler recogidaDelivery
+  console.log('[INFO] Emitiendo evento "Recogida Delivery" para continuar el flujo');
+  await putEvent({
+    source: 'stepfunctions.workflow',
+    detailType: 'Recogida Delivery',
+    detail: {
+      tenant_id: tenantId,
+      pedido_id: pedidoId,
+      estado: 'en_camino',
+    },
   });
 
   return response(200, { message: 'Pedido marcado como despachado', pedido: updated });

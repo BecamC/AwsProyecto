@@ -3,6 +3,7 @@ const { response } = require('../../shared/response');
 const { sendTaskSuccess } = require('../../shared/stepfunctions');
 const { publish, buildNotificationAttributes } = require('../../shared/sns');
 const { registrarLog } = require('../../shared/logs');
+const { putEvent } = require('../../shared/eventbridge');
 
 const TABLA_PEDIDOS = process.env.TABLA_PEDIDOS;
 const SNS_TOPIC_ARN = process.env.SNS_NOTIFICACIONES_ARN;
@@ -127,6 +128,19 @@ async function handleHttpInvocation(event) {
       attributes: buildNotificationAttributes({ pedidoId, tipo: 'preparando' }),
     });
   }
+
+  // Emitir evento para que el Step Functions continúe
+  // Esto activará el handler despachandoComida
+  console.log('[INFO] Emitiendo evento "Despachando Comida" para continuar el flujo');
+  await putEvent({
+    source: 'stepfunctions.workflow',
+    detailType: 'Despachando Comida',
+    detail: {
+      tenant_id: tenantId,
+      pedido_id: pedidoId,
+      estado: 'despachando',
+    },
+  });
 
   return response(200, { message: 'Pedido confirmado', pedido: updated });
 }
