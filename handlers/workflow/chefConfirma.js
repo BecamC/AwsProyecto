@@ -22,6 +22,23 @@ async function handleStepFunctionsInvocation(event) {
     throw new Error('Evento inválido para ChefConfirma');
   }
 
+  // Verificar si ya existe un token (puede ser una invocación duplicada)
+  const pedidoExistente = await getItem(TABLA_PEDIDOS, {
+    tenant_id: tenantId,
+    pedido_id: pedidoId,
+  });
+  
+  if (pedidoExistente?.chef_task_token) {
+    console.warn(`[WARN Step Functions] Ya existe un chef_task_token para pedido ${pedidoId}. Esto puede indicar una invocación duplicada de Step Functions.`);
+    console.warn(`[WARN Step Functions] Token existente (primeros 50 chars): ${pedidoExistente.chef_task_token.substring(0, 50)}`);
+    console.warn(`[WARN Step Functions] Token nuevo (primeros 50 chars): ${taskToken.substring(0, 50)}`);
+    
+    // Si los tokens son diferentes, es una invocación duplicada - usar el más reciente
+    if (pedidoExistente.chef_task_token !== taskToken) {
+      console.warn(`[WARN Step Functions] Los tokens son diferentes. Sobrescribiendo con el nuevo token.`);
+    }
+  }
+  
   console.log(`[INFO Step Functions] Guardando chef_task_token para pedido ${pedidoId}`);
   
   await updateItem({
@@ -117,13 +134,23 @@ async function handleHttpInvocation(event) {
     return response(200, { message: 'Pedido rechazado por el chef' });
   }
 
-  await sendTaskSuccess({
-    taskToken: pedido.chef_task_token,
-    output: {
-      pedido_id: pedidoId,
-      estado: 'preparando',
-    },
-  });
+  console.log('[INFO] Enviando sendTaskSuccess a Step Functions...');
+  console.log('[DEBUG] TaskToken (primeros 50 chars):', pedido.chef_task_token?.substring(0, 50));
+  
+  try {
+    await sendTaskSuccess({
+      taskToken: pedido.chef_task_token,
+      output: {
+        pedido_id: pedidoId,
+        estado: 'preparando',
+      },
+    });
+    console.log('[SUCCESS] sendTaskSuccess ejecutado correctamente. Step Functions debería avanzar ahora.');
+  } catch (error) {
+    console.error('[ERROR] Error al ejecutar sendTaskSuccess:', error);
+    console.error('[ERROR] Stack:', error.stack);
+    throw error; // Re-lanzar el error para que falle la función
+  }
 
   const fecha = getTimestamp();
   const updated = await updateItem({
