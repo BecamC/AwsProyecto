@@ -94,103 +94,15 @@ function normalizarCategoria(categoria) {
     .replace(/\s+/g, '_'); // Reemplazar espacios con guiones bajos
 }
 
-// Función para determinar si un producto es combo basado en su descripción
-function esCombo(nombre, descripcion) {
-  const texto = `${nombre} ${descripcion || ''}`.toLowerCase();
-  
-  // Patrones que indican que es un combo
-  const patronesCombo = [
-    /\+\s*(papas|bebida|gaseosa|chicha|ensalada|guarnición)/,
-    /con\s+(papas|bebida|gaseosa|chicha|ensalada|guarnición)\s+y\s+/,
-    /\d+\s+(papas|bebidas|gaseosas|chichas|ensaladas)/,
-    /(incluye|con)\s+(.*?)\s+(y|más|\+)/,
-  ];
-  
-  return patronesCombo.some(patron => patron.test(texto));
-}
-
-// Función para extraer productos base de una descripción de combo
-function extraerProductosBase(descripcion, productosBase) {
-  const items = [];
-  const texto = descripcion.toLowerCase();
-  
-  // Palabras clave comunes que indican productos base
-  const palabrasClave = {
-    'papas fritas': ['papas fritas', 'papas', 'fritas'],
-    'gaseosa': ['gaseosa', 'gaseosa personal', 'bebida personal'],
-    'chicha': ['chicha', 'chicha personal', 'botella de chicha'],
-    'ensalada': ['ensalada', 'ensalada regular', 'ensalada grande', 'guarnición de ensalada'],
-    'arroz': ['arroz', 'arroz blanco'],
-    'camotes': ['camotes', 'camotes fritos'],
-    'brasa': ['1/4 brasa', '1/2 brasa', '1 brasa', 'pardos brasa'],
-    'parrillero': ['1/4 parrillero', '1/2 parrillero', 'parrillero'],
-  };
-  
-  // Buscar productos base por palabras clave
-  Object.keys(palabrasClave).forEach(clave => {
-    const variantes = palabrasClave[clave];
-    const encontrado = variantes.some(variante => texto.includes(variante));
-    
-    if (encontrado) {
-      // Buscar producto base que coincida
-      const productoEncontrado = productosBase.find(p => {
-        const nombreProd = p.nombre_producto.toLowerCase();
-        return variantes.some(v => nombreProd.includes(v)) || 
-               nombreProd.includes(clave);
-      });
-      
-      if (productoEncontrado && !items.find(item => item.product_id === productoEncontrado.producto_id)) {
-        // Determinar cantidad
-        let cantidad = 1;
-        const matchCantidad = texto.match(new RegExp(`(\\d+)\\s*(${variantes.join('|')})`, 'i'));
-        if (matchCantidad) {
-          cantidad = parseInt(matchCantidad[1]);
-        }
-        
-        items.push({
-          product_id: productoEncontrado.producto_id,
-          sku: productoEncontrado.sku || `SKU-${productoEncontrado.producto_id.substring(0, 8)}`,
-          quantity: cantidad
-        });
-      }
-    }
-  });
-  
-  // Si no encontramos items, buscar por similitud de nombre
-  if (items.length === 0) {
-    // Buscar productos de categorías relacionadas
-    const categoriasRelacionadas = ['Guarniciones', 'Bebidas', 'Pardos Brasa', 'Pardos Parrilleros'];
-    categoriasRelacionadas.forEach(cat => {
-      const productosCategoria = productosBase.filter(p => 
-        p.categoria && p.categoria.toLowerCase().includes(cat.toLowerCase())
-      );
-      
-      if (productosCategoria.length > 0 && !items.find(item => 
-        productosCategoria.some(p => p.producto_id === item.product_id)
-      )) {
-        // Agregar el primer producto de la categoría como ejemplo
-        items.push({
-          product_id: productosCategoria[0].producto_id,
-          sku: productosCategoria[0].sku || `SKU-${productosCategoria[0].producto_id.substring(0, 8)}`,
-          quantity: 1
-        });
-      }
-    });
-  }
-  
-  return items;
-}
-
 // Función para crear producto
-async function crearProducto(producto, index, productosBase = []) {
+async function crearProducto(producto, index) {
   const categoriaNormalizada = normalizarCategoria(producto.categoria);
-  const esUnCombo = esCombo(producto.nombre, producto.descripcion);
   
   const body = {
     nombre_producto: producto.nombre,
     descripcion_producto: producto.descripcion || '',
     precio_producto: producto.precio,
-    tipo_producto: esUnCombo ? 'combo' : categoriaNormalizada,
+    tipo_producto: categoriaNormalizada, // Usar categoría normalizada como tipo_producto
     categoria: producto.categoria,
     image_url: producto.imagen,
     currency: 'PEN',
@@ -199,14 +111,6 @@ async function crearProducto(producto, index, productosBase = []) {
     stock_minimo: 10,
     stock_maximo: 9999,
   };
-
-  // Si es combo y tenemos productos base, agregar combo_items
-  if (esUnCombo && productosBase.length > 0) {
-    const comboItems = extraerProductosBase(producto.descripcion || '', productosBase);
-    if (comboItems.length > 0) {
-      body.combo_items = comboItems;
-    }
-  }
 
   const url = `${BASE_URL}/producto`;
   const options = {
@@ -221,12 +125,11 @@ async function crearProducto(producto, index, productosBase = []) {
   try {
     const result = await makeRequest(url, options);
     if (result.status === 201) {
-      const tipoMostrar = esUnCombo ? 'combo' : categoriaNormalizada;
-      console.log(`✅ [${String(index + 1).padStart(3, '0')}/${productos.length}] ${producto.nombre.substring(0, 50).padEnd(50)} - ${tipoMostrar.padEnd(15)} ${esUnCombo && body.combo_items ? `(${body.combo_items.length} items)` : ''}`);
+      console.log(`✅ [${String(index + 1).padStart(3, '0')}/${productos.length}] ${producto.nombre.substring(0, 50).padEnd(50)} - ${categoriaNormalizada.padEnd(20)}`);
       return { 
         success: true, 
         producto_id: result.data.producto?.producto_id, 
-        tipo: esUnCombo ? 'combo' : categoriaNormalizada,
+        tipo: categoriaNormalizada,
         nombre: producto.nombre,
         categoria: producto.categoria
       };
@@ -240,27 +143,6 @@ async function crearProducto(producto, index, productosBase = []) {
   }
 }
 
-// Función para obtener todos los productos creados
-async function obtenerProductosCreados() {
-  const url = `${BASE_URL}/producto/obtener?tenant_id=${TENANT_ID}&limit=1000`;
-  const options = {
-    method: 'GET',
-    headers: {
-      'x-tenant-id': TENANT_ID,
-    },
-  };
-
-  try {
-    const result = await makeRequest(url, options);
-    if (result.status === 200 && result.data.productos) {
-      return result.data.productos;
-    }
-    return [];
-  } catch (error) {
-    console.error('Error obteniendo productos:', error.message);
-    return [];
-  }
-}
 
 // Función principal
 async function main() {
@@ -275,20 +157,18 @@ async function main() {
     fallidos: 0,
     porTipo: {},
     errores: [],
-    productosCreados: [],
   };
 
-  // PASO 1: Crear todos los productos individuales primero
-  console.log('\n📦 PASO 1: Creando productos individuales...\n');
+  // Crear todos los productos usando su categoría como tipo_producto
+  console.log('\n📦 Creando productos...\n');
   
   for (let i = 0; i < productos.length; i++) {
-    const resultado = await crearProducto(productos[i], i, []);
+    const resultado = await crearProducto(productos[i], i);
     
     if (resultado.success) {
       resultados.exitosos++;
-      resultados.productosCreados.push(resultado);
       
-      // Contar por tipo
+      // Contar por tipo (categoría)
       const tipo = resultado.tipo || 'otros';
       resultados.porTipo[tipo] = (resultados.porTipo[tipo] || 0) + 1;
     } else {
@@ -306,71 +186,12 @@ async function main() {
     }
   }
 
-  // PASO 2: Identificar productos que deberían ser combos y actualizarlos
-  console.log('\n\n🔄 PASO 2: Identificando y creando combos...\n');
-  
-  // Obtener todos los productos creados para usarlos como base
-  const productosCreados = await obtenerProductosCreados();
-  console.log(`📋 Productos base disponibles: ${productosCreados.length}\n`);
-
-  let combosCreados = 0;
-  for (let i = 0; i < productos.length; i++) {
-    const producto = productos[i];
-    if (esCombo(producto.nombre, producto.descripcion)) {
-      // Buscar el producto creado
-      const productoCreado = resultados.productosCreados.find(p => p.nombre === producto.nombre);
-      
-      if (productoCreado && productoCreado.tipo !== 'combo') {
-        // Extraer productos base
-        const comboItems = extraerProductosBase(producto.descripcion || '', productosCreados);
-        
-        if (comboItems.length > 0) {
-          // Actualizar el producto para convertirlo en combo
-          const url = `${BASE_URL}/producto/${productoCreado.producto_id}`;
-          const body = {
-            tipo_producto: 'combo',
-            combo_items: comboItems
-          };
-          
-          const options = {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-tenant-id': TENANT_ID,
-            },
-            body: JSON.stringify(body),
-          };
-          
-          try {
-            const result = await makeRequest(url, options);
-            if (result.status === 200) {
-              console.log(`✅ Combo creado: ${producto.nombre.substring(0, 50).padEnd(50)} - ${comboItems.length} items`);
-              combosCreados++;
-              // Actualizar el tipo en resultados
-              const tipoAnterior = productoCreado.tipo;
-              productoCreado.tipo = 'combo';
-              resultados.porTipo['combo'] = (resultados.porTipo['combo'] || 0) + 1;
-              if (resultados.porTipo[tipoAnterior] && resultados.porTipo[tipoAnterior] > 0) {
-                resultados.porTipo[tipoAnterior]--;
-              }
-            }
-          } catch (error) {
-            console.error(`❌ Error creando combo: ${producto.nombre} - ${error.message}`);
-          }
-          
-          await new Promise(resolve => setTimeout(resolve, 200));
-        }
-      }
-    }
-  }
-
   // Resumen
   console.log('\n' + '='.repeat(80));
   console.log('📊 RESUMEN DE INSERCIÓN');
   console.log('='.repeat(80));
   console.log(`✅ Exitosos: ${resultados.exitosos}`);
   console.log(`❌ Fallidos: ${resultados.fallidos}`);
-  console.log(`🔄 Combos creados: ${combosCreados}`);
   console.log(`\nPor tipo (categoría):`);
   Object.keys(resultados.porTipo).sort().forEach(tipo => {
     console.log(`  - ${tipo}: ${resultados.porTipo[tipo]}`);

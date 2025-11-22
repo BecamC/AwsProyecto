@@ -65,9 +65,10 @@ function validateProducto(data = {}, isUpdate = false) {
   if (!data.nombre_producto) {
     errors.push('nombre_producto es requerido');
   }
-  if (!data.tipo_producto || !VALID_PRODUCT_TYPES.includes(data.tipo_producto)) {
-    errors.push(`tipo_producto es requerido y debe ser uno de: ${VALID_PRODUCT_TYPES.join(', ')}`);
+  if (!data.tipo_producto) {
+    errors.push('tipo_producto es requerido');
   }
+  // Ya no limitamos los tipos, aceptamos cualquier tipo_producto
   if (data.precio_producto === undefined || data.precio_producto === null || data.precio_producto === '') {
     errors.push('precio_producto es requerido');
   } else if (typeof data.precio_producto !== 'number' || data.precio_producto <= 0) {
