@@ -103,7 +103,7 @@ function esCombo(nombre, descripcion) {
     /\+\s*(papas|bebida|gaseosa|chicha|ensalada|guarnición)/,
     /con\s+(papas|bebida|gaseosa|chicha|ensalada|guarnición)\s+y\s+/,
     /\d+\s+(papas|bebidas|gaseosas|chichas|ensaladas)/,
-    /(incluye|incluye|con)\s+(.*?)\s+(y|más|+)/,
+    /(incluye|con)\s+(.*?)\s+(y|más|\+)/,
   ];
   
   return patronesCombo.some(patron => patron.test(texto));
