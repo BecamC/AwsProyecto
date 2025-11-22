@@ -188,6 +188,12 @@ exports.handler = async (event) => {
     if (STEP_FUNCTIONS_ARN) {
       try {
         console.log(`[INFO] Iniciando Step Functions para pedido ${pedidoId}`);
+        console.log(`[DEBUG] STEP_FUNCTIONS_ARN: ${STEP_FUNCTIONS_ARN}`);
+        console.log(`[DEBUG] Input para Step Functions:`, JSON.stringify({
+          tenant_id: tenantId,
+          pedido_id: pedidoId,
+        }));
+        
         const sfnResult = await startExecution({
           stateMachineArn: STEP_FUNCTIONS_ARN,
           input: {
@@ -195,11 +201,17 @@ exports.handler = async (event) => {
             pedido_id: pedidoId,
           },
         });
-        console.log('[INFO] Step Functions iniciado:', sfnResult.executionArn);
+        
+        console.log('[INFO] Step Functions iniciado exitosamente');
+        console.log('[DEBUG] Execution ARN:', sfnResult.executionArn);
+        console.log('[DEBUG] Start Date:', sfnResult.startDate);
       } catch (error) {
         console.error('[ERROR] Error iniciando Step Functions:', error);
+        console.error('[ERROR] Stack:', error.stack);
         // No fallar el pedido si Step Functions falla, solo loguear
       }
+    } else {
+      console.error('[ERROR] STEP_FUNCTIONS_ARN no está configurado!');
     }
 
     if (SQS_PEDIDOS_URL) {

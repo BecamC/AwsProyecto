@@ -9,12 +9,21 @@ const TABLA_PEDIDOS = process.env.TABLA_PEDIDOS;
 const SNS_TOPIC_ARN = process.env.SNS_NOTIFICACIONES_ARN;
 
 async function handleStepFunctionsInvocation(event) {
-  const { taskToken, pedido_id: pedidoId, tenant_id: tenantId } = event;
+  console.log('[DEBUG Step Functions] Evento recibido:', JSON.stringify(event));
+  
+  // Step Functions puede enviar el payload directamente o dentro de un objeto
+  const payload = event.Payload || event;
+  const { taskToken, pedido_id: pedidoId, tenant_id: tenantId } = payload;
+
+  console.log('[DEBUG Step Functions] Extraído:', { taskToken: taskToken ? 'EXISTS' : 'MISSING', pedidoId, tenantId });
 
   if (!taskToken || !pedidoId || !tenantId) {
+    console.error('[ERROR Step Functions] Faltan datos:', { taskToken: !!taskToken, pedidoId: !!pedidoId, tenantId: !!tenantId });
     throw new Error('Evento inválido para ChefConfirma');
   }
 
+  console.log(`[INFO Step Functions] Guardando chef_task_token para pedido ${pedidoId}`);
+  
   await updateItem({
     TableName: TABLA_PEDIDOS,
     Key: { tenant_id: tenantId, pedido_id: pedidoId },
@@ -23,6 +32,8 @@ async function handleStepFunctionsInvocation(event) {
       ':token': taskToken,
     },
   });
+  
+  console.log(`[INFO Step Functions] chef_task_token guardado exitosamente para pedido ${pedidoId}`);
 
   if (SNS_TOPIC_ARN) {
     await publish({
@@ -62,8 +73,26 @@ async function handleHttpInvocation(event) {
     pedido_id: pedidoId,
   });
 
+  console.log('[DEBUG HTTP] Pedido obtenido:', {
+    pedidoExiste: !!pedido,
+    tieneChefTaskToken: !!(pedido?.chef_task_token),
+    estado: pedido?.estado
+  });
+
   if (!pedido || !pedido.chef_task_token) {
-    return response(409, { message: 'No hay una confirmación pendiente para este pedido' });
+    console.error('[ERROR HTTP] No hay chef_task_token. Pedido:', {
+      existe: !!pedido,
+      estado: pedido?.estado,
+      tieneToken: !!(pedido?.chef_task_token)
+    });
+    return response(409, { 
+      message: 'No hay una confirmación pendiente para este pedido',
+      debug: {
+        pedidoExiste: !!pedido,
+        estado: pedido?.estado,
+        tieneToken: !!(pedido?.chef_task_token)
+      }
+    });
   }
 
   if (!aprobado) {
@@ -136,16 +165,28 @@ async function handleHttpInvocation(event) {
 
 exports.handler = async (event) => {
   try {
-    if (event.taskToken) {
+    console.log('[DEBUG chefConfirma] Tipo de evento recibido:', {
+      hasTaskToken: !!(event.taskToken || event.Payload?.taskToken),
+      hasRequestContext: !!event.requestContext,
+      eventKeys: Object.keys(event)
+    });
+
+    // Verificar si es invocación de Step Functions
+    if (event.taskToken || event.Payload?.taskToken) {
+      console.log('[INFO chefConfirma] Invocación desde Step Functions detectada');
       return await handleStepFunctionsInvocation(event);
     }
+    
+    // Verificar si es invocación HTTP
     if (event.requestContext) {
+      console.log('[INFO chefConfirma] Invocación HTTP detectada');
       return await handleHttpInvocation(event);
     }
-    console.warn('Evento no reconocido en chefConfirma', event);
+    
+    console.warn('[WARN chefConfirma] Evento no reconocido:', JSON.stringify(event));
     return response(400, { message: 'Evento no soportado' });
   } catch (error) {
-    console.error('Error en chefConfirma', error);
+    console.error('[ERROR chefConfirma] Error:', error);
     if (event.requestContext) {
       return response(500, { message: 'Error interno al confirmar pedido' });
     }
