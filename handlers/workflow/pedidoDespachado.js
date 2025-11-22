@@ -9,8 +9,21 @@ const TABLA_PEDIDOS = process.env.TABLA_PEDIDOS;
 const SNS_TOPIC_ARN = process.env.SNS_NOTIFICACIONES_ARN;
 
 async function handleStepFunctionsInvocation(event) {
-  const { taskToken, pedido_id: pedidoId, tenant_id: tenantId } = event;
+  console.log('[DEBUG Step Functions pedidoDespachado] Evento recibido:', JSON.stringify(event));
+  
+  // Step Functions puede enviar el payload directamente o dentro de un objeto
+  const payload = event.Payload || event;
+  const { taskToken, pedido_id: pedidoId, tenant_id: tenantId } = payload;
 
+  console.log('[DEBUG Step Functions pedidoDespachado] Extraído:', { taskToken: taskToken ? 'EXISTS' : 'MISSING', pedidoId, tenantId });
+
+  if (!taskToken || !pedidoId || !tenantId) {
+    console.error('[ERROR Step Functions pedidoDespachado] Faltan datos:', { taskToken: !!taskToken, pedidoId: !!pedidoId, tenantId: !!tenantId });
+    throw new Error('Evento inválido para pedidoDespachado');
+  }
+
+  console.log(`[INFO Step Functions pedidoDespachado] Guardando despacho_task_token para pedido ${pedidoId}`);
+  
   await updateItem({
     TableName: TABLA_PEDIDOS,
     Key: { tenant_id: tenantId, pedido_id: pedidoId },
@@ -20,6 +33,8 @@ async function handleStepFunctionsInvocation(event) {
       ':estado': 'despachando',
     },
   });
+  
+  console.log(`[INFO Step Functions pedidoDespachado] despacho_task_token guardado exitosamente para pedido ${pedidoId}`);
 
   return { status: 'waiting_despacho' };
 }
@@ -40,8 +55,27 @@ async function handleHttpInvocation(event) {
   }
 
   const pedido = await getItem(TABLA_PEDIDOS, { tenant_id: tenantId, pedido_id: pedidoId });
+  
+  console.log('[DEBUG HTTP pedidoDespachado] Pedido obtenido:', {
+    pedidoExiste: !!pedido,
+    tieneDespachoTaskToken: !!(pedido?.despacho_task_token),
+    estado: pedido?.estado
+  });
+
   if (!pedido || !pedido.despacho_task_token) {
-    return response(409, { message: 'No hay despacho pendiente' });
+    console.error('[ERROR HTTP pedidoDespachado] No hay despacho_task_token. Pedido:', {
+      existe: !!pedido,
+      estado: pedido?.estado,
+      tieneToken: !!(pedido?.despacho_task_token)
+    });
+    return response(409, { 
+      message: 'No hay despacho pendiente',
+      debug: {
+        pedidoExiste: !!pedido,
+        estado: pedido?.estado,
+        tieneToken: !!(pedido?.despacho_task_token)
+      }
+    });
   }
 
   await sendTaskSuccess({
@@ -90,16 +124,28 @@ async function handleHttpInvocation(event) {
 
 exports.handler = async (event) => {
   try {
-    if (event.taskToken) {
+    console.log('[DEBUG pedidoDespachado] Tipo de evento recibido:', {
+      hasTaskToken: !!(event.taskToken || event.Payload?.taskToken),
+      hasRequestContext: !!event.requestContext,
+      eventKeys: Object.keys(event)
+    });
+
+    // Verificar si es invocación de Step Functions
+    if (event.taskToken || event.Payload?.taskToken) {
+      console.log('[INFO pedidoDespachado] Invocación desde Step Functions detectada');
       return await handleStepFunctionsInvocation(event);
     }
+    
+    // Verificar si es invocación HTTP
     if (event.requestContext) {
+      console.log('[INFO pedidoDespachado] Invocación HTTP detectada');
       return await handleHttpInvocation(event);
     }
-    console.warn('Evento no soportado en pedidoDespachado', event);
+    
+    console.warn('[WARN pedidoDespachado] Evento no reconocido:', JSON.stringify(event));
     return response(400, { message: 'Evento no soportado' });
   } catch (error) {
-    console.error('Error en pedidoDespachado', error);
+    console.error('[ERROR pedidoDespachado] Error:', error);
     if (event.requestContext) {
       return response(500, { message: 'Error interno al despachar pedido' });
     }
