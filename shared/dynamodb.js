@@ -12,7 +12,31 @@ const {
 const REGION = process.env.REGION || 'us-east-1';
 
 const client = new DynamoDBClient({ region: REGION });
-const docClient = DynamoDBDocumentClient.from(client);
+// Configurar el cliente para eliminar automáticamente valores undefined
+const docClient = DynamoDBDocumentClient.from(client, {
+  marshallOptions: {
+    removeUndefinedValues: true, // Eliminar valores undefined automáticamente
+    convertEmptyValues: false,
+  },
+});
+
+// Función helper para limpiar valores undefined (DynamoDB no los acepta)
+function cleanUndefinedValues(obj) {
+  if (obj === null || obj === undefined) return null;
+  if (Array.isArray(obj)) {
+    return obj.map(cleanUndefinedValues).filter(item => item !== undefined);
+  }
+  if (typeof obj === 'object') {
+    const cleaned = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        cleaned[key] = cleanUndefinedValues(value);
+      }
+    }
+    return cleaned;
+  }
+  return obj;
+}
 
 async function getItem(TableName, Key) {
   const command = new GetCommand({ TableName, Key });
@@ -21,9 +45,11 @@ async function getItem(TableName, Key) {
 }
 
 async function putItem(TableName, Item) {
-  const command = new PutCommand({ TableName, Item });
+  // Limpiar valores undefined antes de guardar (DynamoDB no los acepta)
+  const cleanedItem = cleanUndefinedValues(Item);
+  const command = new PutCommand({ TableName, Item: cleanedItem });
   await docClient.send(command);
-  return Item;
+  return cleanedItem;
 }
 
 async function updateItem(params) {
