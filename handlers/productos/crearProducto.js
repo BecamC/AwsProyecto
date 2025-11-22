@@ -48,13 +48,13 @@ exports.handler = async (event) => {
     // Guardar producto
     await putItem(TABLA_PRODUCTOS, body);
 
-    // Inicializar inventario para el nuevo producto
+    // Inicializar inventario para el nuevo producto (solo el inventario controla el stock)
     const inventarioItem = {
       tenant_id: tenantId,
       producto_id: body.producto_id,
-      stock_actual: body.stock || 0,
-      stock_minimo: body.stock_minimo || 0,
-      stock_maximo: body.stock_maximo || 9999,
+      stock_actual: 0, // Inicializar en 0, se ajustará manualmente o por el microservicio de inventario
+      stock_minimo: 10,
+      stock_maximo: 9999,
       ultima_actualizacion: now,
     };
     await putItem(TABLA_INVENTARIO, inventarioItem);
