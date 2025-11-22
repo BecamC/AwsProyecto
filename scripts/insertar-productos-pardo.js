@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 
 /**
- * Script para insertar todos los productos de Pardo desde productos.js
+ * Script para insertar todos los productos de Pardo desde productos-data.js
  * 
  * Uso: node insertar-productos-pardo.js
  * 
- * Requiere:
- * - BASE_URL: URL del API Gateway (default: https://9uoan5h0h1.execute-api.us-east-1.amazonaws.com/dev)
+ * Variables de entorno opcionales:
+ * - BASE_URL: URL del API Gateway (default: https://tl5son9q35.execute-api.us-east-1.amazonaws.com/dev)
  * - TENANT_ID: ID del tenant (default: "pardo")
+ * 
+ * Ejemplo con URL personalizada:
+ *   BASE_URL=https://tu-api.execute-api.us-east-1.amazonaws.com/dev node insertar-productos-pardo.js
+ * 
+ * Para obtener la URL actual después de un deploy:
+ *   sls info
  */
 
 const https = require('https');
@@ -16,7 +22,9 @@ const fs = require('fs');
 const path = require('path');
 
 // Configuración
-const BASE_URL = process.env.BASE_URL || 'https://9uoan5h0h1.execute-api.us-east-1.amazonaws.com/dev';
+// NOTA: Si la URL cambia después de un deploy, actualiza esta línea o usa:
+// BASE_URL=https://tu-nueva-url.execute-api.us-east-1.amazonaws.com/dev node insertar-productos-pardo.js
+const BASE_URL = process.env.BASE_URL || 'https://tl5son9q35.execute-api.us-east-1.amazonaws.com/dev';
 const TENANT_ID = process.env.TENANT_ID || 'pardo';
 
 // Intentar leer productos desde archivo, si no existe, usar array vacío
