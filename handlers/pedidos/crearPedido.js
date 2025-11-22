@@ -196,7 +196,8 @@ exports.handler = async (event) => {
     await registrarLog({
       userId: payload.usuario_id,
       actionType: 'crear_pedido',
-      pedidoId,
+      pedidoId: pedidoId,
+      productoId: productosDetallados.length > 0 ? productosDetallados[0].product_id : null, // Primer producto del pedido
       detalles: pedido,
     });
 
@@ -207,7 +208,8 @@ exports.handler = async (event) => {
       userId: payload.usuario_id,
       actionType: 'crear_pedido',
       resultado: 'Fallido',
-      pedidoId,
+      pedidoId: pedidoId,
+      productoId: null,
       errorMessage: error.message,
     });
     return response(500, { message: 'Error interno al crear pedido' });
