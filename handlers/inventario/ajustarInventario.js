@@ -12,11 +12,17 @@ exports.handler = async (event) => {
     }
 
     const body = JSON.parse(event.body || '{}');
-    const { producto_id, cantidad, tipo_movimiento, reason, pedido_id } = body;
+    // Aceptar ambos formatos: cantidad/cantidad_ajuste, tipo_movimiento/tipo_ajuste
+    const producto_id = body.producto_id;
+    const cantidad = body.cantidad ?? body.cantidad_ajuste;
+    const tipo_movimiento = body.tipo_movimiento ?? body.tipo_ajuste;
+    const reason = body.reason ?? body.notas;
+    const pedido_id = body.pedido_id;
+    const user_id = body.user_id;
 
     if (!producto_id || cantidad === undefined || !tipo_movimiento) {
       return response(400, { 
-        message: 'producto_id, cantidad y tipo_movimiento son requeridos' 
+        message: 'producto_id, cantidad (o cantidad_ajuste) y tipo_movimiento (o tipo_ajuste) son requeridos' 
       });
     }
 
@@ -41,41 +47,23 @@ exports.handler = async (event) => {
       inventario = {
         tenant_id: tenantId,
         producto_id: producto_id,
-        cantidad_disponible: tipo_movimiento === 'entrada' ? cantidad : 0,
-        ultimos_movimientos: [],
+        stock_actual: tipo_movimiento === 'entrada' ? cantidad : 0,
         stock_minimo: body.stock_minimo || 10,
         stock_maximo: body.stock_maximo || 1000,
         ultima_actualizacion: now
       };
     }
 
-    // Actualizar cantidad disponible según tipo de movimiento
+    // Usar stock_actual (campo unificado)
+    const stockActual = inventario?.stock_actual ?? inventario?.cantidad_disponible ?? 0;
+
+    // Actualizar stock según tipo de movimiento
     if (tipo_movimiento === 'entrada') {
-      inventario.cantidad_disponible = (inventario.cantidad_disponible || 0) + cantidad;
+      inventario.stock_actual = stockActual + cantidad;
     } else if (tipo_movimiento === 'salida') {
-      inventario.cantidad_disponible = Math.max(0, (inventario.cantidad_disponible || 0) - cantidad);
+      inventario.stock_actual = Math.max(0, stockActual - cantidad);
     } else if (tipo_movimiento === 'ajuste') {
-      inventario.cantidad_disponible = cantidad;
-    }
-
-    // Agregar movimiento al historial
-    const nuevoMovimiento = {
-      type: tipo_movimiento,
-      cantidad: cantidad,
-      pedido_id: pedido_id || null,
-      reason: reason || 'Ajuste manual',
-      timestamp: now
-    };
-
-    if (!inventario.ultimos_movimientos) {
-      inventario.ultimos_movimientos = [];
-    }
-
-    inventario.ultimos_movimientos.unshift(nuevoMovimiento);
-    
-    // Mantener solo los últimos 50 movimientos
-    if (inventario.ultimos_movimientos.length > 50) {
-      inventario.ultimos_movimientos = inventario.ultimos_movimientos.slice(0, 50);
+      inventario.stock_actual = cantidad;
     }
 
     inventario.ultima_actualizacion = now;
@@ -96,8 +84,10 @@ exports.handler = async (event) => {
       inventario: {
         tenant_id: inventario.tenant_id,
         producto_id: inventario.producto_id,
-        cantidad_disponible: inventario.cantidad_disponible,
-        ultimo_movimiento: nuevoMovimiento
+        stock_actual: inventario.stock_actual,
+        stock_minimo: inventario.stock_minimo,
+        stock_maximo: inventario.stock_maximo,
+        ultima_actualizacion: inventario.ultima_actualizacion
       }
     });
   } catch (error) {

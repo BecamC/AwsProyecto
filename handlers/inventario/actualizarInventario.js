@@ -34,8 +34,9 @@ exports.handler = async (event) => {
         producto_id: item.product_id,
       });
 
-      const disponible = inventory?.cantidad_disponible ?? 0;
-      if (disponible < item.quantity) {
+      // Usar stock_actual (campo unificado)
+      const stockActual = inventory?.stock_actual ?? inventory?.cantidad_disponible ?? 0;
+      if (stockActual < item.quantity) {
         throw new Error(`Inventario insuficiente para producto ${item.product_id}`);
       }
 
@@ -56,10 +57,10 @@ exports.handler = async (event) => {
           tenant_id: tenantId,
           producto_id: item.product_id,
         },
-        UpdateExpression: 'SET cantidad_disponible = :cantidad, ultimos_movimientos = :movimientos',
+        UpdateExpression: 'SET stock_actual = :stock, ultima_actualizacion = :timestamp',
         ExpressionAttributeValues: {
-          ':cantidad': disponible - item.quantity,
-          ':movimientos': nuevosMovimientos,
+          ':stock': stockActual - item.quantity,
+          ':timestamp': new Date().toISOString(),
         },
       });
     }

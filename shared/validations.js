@@ -103,5 +103,7 @@ module.exports = {
   validateCrearPedido,
   validateActualizarPedido,
   validateProducto,
+  VALID_PRODUCT_TYPES,
+  VALID_STATES,
 };
 

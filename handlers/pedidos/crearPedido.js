@@ -48,7 +48,9 @@ exports.handler = async (event) => {
         producto_id: item.producto_id,
       });
 
-      if (!inventario || inventario.cantidad_disponible < item.cantidad) {
+      // Usar stock_actual (campo unificado)
+      const stockDisponible = inventario?.stock_actual ?? inventario?.cantidad_disponible ?? 0;
+      if (!inventario || stockDisponible < item.cantidad) {
         return response(400, { message: `Inventario insuficiente para producto ${item.producto_id}` });
       }
 

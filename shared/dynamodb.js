@@ -34,8 +34,13 @@ async function updateItem(params) {
 
 async function query(params) {
   const command = new QueryCommand(params);
-  const { Items } = await docClient.send(command);
-  return Items || [];
+  const result = await docClient.send(command);
+  return {
+    Items: result.Items || [],
+    LastEvaluatedKey: result.LastEvaluatedKey,
+    Count: result.Count,
+    ScannedCount: result.ScannedCount,
+  };
 }
 
 async function scan(params) {
