@@ -3,11 +3,13 @@ const { response } = require('../../shared/response');
 const { validateCrearPedido } = require('../../shared/validations');
 const { sendMessage } = require('../../shared/sqs');
 const { registrarLog } = require('../../shared/logs');
+const { startExecution } = require('../../shared/stepfunctions');
 
 const TABLA_PEDIDOS = process.env.TABLA_PEDIDOS;
 const TABLA_PRODUCTOS = process.env.TABLA_PRODUCTOS;
 const TABLA_INVENTARIO = process.env.TABLA_INVENTARIO;
 const SQS_PEDIDOS_URL = process.env.SQS_PEDIDOS_URL;
+const STEP_FUNCTIONS_ARN = process.env.STEP_FUNCTIONS_ARN;
 
 exports.handler = async (event) => {
   const tenantId = event.headers?.['x-tenant-id'] || event.headers?.['X-Tenant-Id'];
@@ -181,6 +183,24 @@ exports.handler = async (event) => {
     console.log('[DEBUG] Intentando guardar pedido en DynamoDB...');
     await putItem(TABLA_PEDIDOS, pedido);
     console.log('[DEBUG] Pedido guardado exitosamente en DynamoDB');
+
+    // Iniciar Step Functions inmediatamente después de crear el pedido
+    if (STEP_FUNCTIONS_ARN) {
+      try {
+        console.log(`[INFO] Iniciando Step Functions para pedido ${pedidoId}`);
+        const sfnResult = await startExecution({
+          stateMachineArn: STEP_FUNCTIONS_ARN,
+          input: {
+            tenant_id: tenantId,
+            pedido_id: pedidoId,
+          },
+        });
+        console.log('[INFO] Step Functions iniciado:', sfnResult.executionArn);
+      } catch (error) {
+        console.error('[ERROR] Error iniciando Step Functions:', error);
+        // No fallar el pedido si Step Functions falla, solo loguear
+      }
+    }
 
     if (SQS_PEDIDOS_URL) {
       await sendMessage(SQS_PEDIDOS_URL, {
