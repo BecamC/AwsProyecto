@@ -83,18 +83,7 @@ async function handleHttpInvocation(event) {
     pedidoId,
   });
 
-  // Emitir evento para que el Step Functions continúe
-  // Esto activará el handler recogidaDelivery
-  console.log('[INFO] Emitiendo evento "Recogida Delivery" para continuar el flujo');
-  await putEvent({
-    source: 'stepfunctions.workflow',
-    detailType: 'Recogida Delivery',
-    detail: {
-      tenant_id: tenantId,
-      pedido_id: pedidoId,
-      estado: 'en_camino',
-    },
-  });
+  console.log('[INFO] Pedido despachado confirmado. Step Functions continuará automáticamente.');
 
   return response(200, { message: 'Pedido marcado como despachado', pedido: updated });
 }

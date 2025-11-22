@@ -310,6 +310,16 @@ functions:
   clienteRecibeComida:
     handler: handlers/workflow/clienteRecibeComida.handler
 
+  iniciarFlujoPedido:
+    handler: handlers/workflow/iniciarFlujoPedido.handler
+    events:
+      - eventBridge:
+          pattern:
+            source:
+              - pedidos.microservicio
+            detail-type:
+              - Pedido Creado
+
 resources:
   Resources:
     TablaProductos:

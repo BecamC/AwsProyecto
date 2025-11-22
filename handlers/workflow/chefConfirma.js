@@ -129,18 +129,7 @@ async function handleHttpInvocation(event) {
     });
   }
 
-  // Emitir evento para que el Step Functions continúe
-  // Esto activará el handler despachandoComida
-  console.log('[INFO] Emitiendo evento "Despachando Comida" para continuar el flujo');
-  await putEvent({
-    source: 'stepfunctions.workflow',
-    detailType: 'Despachando Comida',
-    detail: {
-      tenant_id: tenantId,
-      pedido_id: pedidoId,
-      estado: 'despachando',
-    },
-  });
+  console.log('[INFO] Chef confirmó. Step Functions continuará automáticamente al siguiente estado.');
 
   return response(200, { message: 'Pedido confirmado', pedido: updated });
 }
