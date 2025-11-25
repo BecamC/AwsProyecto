@@ -1,4 +1,4 @@
-service: pardo-pedidos-system
+service: alonsobenitess2
 
 
 provider:
@@ -19,7 +19,7 @@ provider:
     SNS_NOTIFICACIONES_ARN: ${self:custom.snsTopicArn}
     STEP_FUNCTIONS_ARN: ${self:custom.stepFunctionsArn}
   iam:
-    role: arn:aws:iam::079902990209:role/LabRole
+    role: arn:aws:iam::295655809569:role/LabRole
 
 custom:
   tablas:
