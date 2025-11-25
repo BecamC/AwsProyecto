@@ -4,6 +4,7 @@ const { sendTaskSuccess } = require('../../shared/stepfunctions');
 const { publish, buildNotificationAttributes } = require('../../shared/sns');
 const { registrarLog } = require('../../shared/logs');
 const { putEvent } = require('../../shared/eventbridge');
+const { actualizarEstado } = require('../../shared/estado');
 
 const TABLA_PEDIDOS = process.env.TABLA_PEDIDOS;
 const SNS_TOPIC_ARN = process.env.SNS_NOTIFICACIONES_ARN;
@@ -160,14 +161,22 @@ async function handleHttpInvocation(event) {
     throw error; // Re-lanzar el error para que falle la función
   }
 
+  // Actualizar estado usando lambda centralizada
+  const resultadoEstado = await actualizarEstado({
+    tenantId,
+    pedidoId,
+    estado: 'preparando',
+    userId: chefId,
+    metadata: { chef_id: chefId },
+  });
+
+  // Remover el token del pedido
   const fecha = getTimestamp();
   const updated = await updateItem({
     TableName: TABLA_PEDIDOS,
     Key: { tenant_id: tenantId, pedido_id: pedidoId },
-    UpdateExpression: 'REMOVE chef_task_token SET estado = :estado, chef_id = :chef, fecha_actualizacion = :fecha',
+    UpdateExpression: 'REMOVE chef_task_token SET fecha_actualizacion = :fecha',
     ExpressionAttributeValues: {
-      ':estado': 'preparando',
-      ':chef': chefId,
       ':fecha': fecha,
     },
     ReturnValues: 'ALL_NEW',

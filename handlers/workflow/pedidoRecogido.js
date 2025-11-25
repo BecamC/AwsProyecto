@@ -2,6 +2,7 @@ const { getItem, updateItem, getTimestamp } = require('../../shared/dynamodb');
 const { response } = require('../../shared/response');
 const { sendTaskSuccess } = require('../../shared/stepfunctions');
 const { publish, buildNotificationAttributes } = require('../../shared/sns');
+const { actualizarEstado } = require('../../shared/estado');
 
 const TABLA_PEDIDOS = process.env.TABLA_PEDIDOS;
 const SNS_TOPIC_ARN = process.env.SNS_NOTIFICACIONES_ARN;
@@ -52,15 +53,22 @@ async function handleHttpInvocation(event) {
     },
   });
 
+  // Actualizar estado usando lambda centralizada
+  const resultadoEstado = await actualizarEstado({
+    tenantId,
+    pedidoId,
+    estado: 'en_camino',
+    userId: motorizadoId,
+    metadata: { motorizado_id: motorizadoId },
+  });
+
+  // Remover token
   const fecha = getTimestamp();
   const updated = await updateItem({
     TableName: TABLA_PEDIDOS,
     Key: { tenant_id: tenantId, pedido_id: pedidoId },
-    UpdateExpression:
-      'REMOVE delivery_task_token SET estado = :estado, motorizado_id = :moto, fecha_actualizacion = :fecha',
+    UpdateExpression: 'REMOVE delivery_task_token SET fecha_actualizacion = :fecha',
     ExpressionAttributeValues: {
-      ':estado': 'en_camino',
-      ':moto': motorizadoId,
       ':fecha': fecha,
     },
     ReturnValues: 'ALL_NEW',

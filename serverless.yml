@@ -189,6 +189,36 @@ functions:
               - x-user-role
             allowCredentials: false
 
+  obtenerEstadoPedido:
+    handler: handlers/pedidos/obtenerEstadoPedido.handler
+    events:
+      - http:
+          path: pedido/{pedido_id}/estado
+          method: get
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-tenant-id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
+
+  actualizarEstadoPedido:
+    handler: handlers/pedidos/actualizarEstadoPedido.handler
+    events:
+      - http:
+          path: pedido/{pedido_id}/estado
+          method: put
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-tenant-id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
+
   consultarInventario:
     handler: handlers/inventario/consultarInventario.handler
     events:

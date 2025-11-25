@@ -4,6 +4,7 @@ const { sendTaskSuccess } = require('../../shared/stepfunctions');
 const { publish, buildNotificationAttributes } = require('../../shared/sns');
 const { registrarLog } = require('../../shared/logs');
 const { putEvent } = require('../../shared/eventbridge');
+const { actualizarEstado } = require('../../shared/estado');
 
 const TABLA_PEDIDOS = process.env.TABLA_PEDIDOS;
 const SNS_TOPIC_ARN = process.env.SNS_NOTIFICACIONES_ARN;
@@ -24,13 +25,20 @@ async function handleStepFunctionsInvocation(event) {
 
   console.log(`[INFO Step Functions pedidoDespachado] Guardando despacho_task_token para pedido ${pedidoId}`);
   
+  // Actualizar estado usando lambda centralizada
+  await actualizarEstado({
+    tenantId,
+    pedidoId,
+    estado: 'despachando',
+  });
+
+  // Guardar token
   await updateItem({
     TableName: TABLA_PEDIDOS,
     Key: { tenant_id: tenantId, pedido_id: pedidoId },
-    UpdateExpression: 'SET despacho_task_token = :token, estado = :estado',
+    UpdateExpression: 'SET despacho_task_token = :token',
     ExpressionAttributeValues: {
       ':token': taskToken,
-      ':estado': 'despachando',
     },
   });
   

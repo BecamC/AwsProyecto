@@ -1,8 +1,44 @@
 const VALID_PRODUCT_TYPES = ['combo', 'single', 'promotion'];
 const VALID_STATES = ['pendiente', 'preparando', 'despachando', 'en_camino', 'entregado', 'cancelado'];
 
+// Matriz de transiciones válidas de estado
+const VALID_TRANSITIONS = {
+  'pendiente': ['preparando', 'cancelado'],
+  'preparando': ['despachando', 'cancelado'],
+  'despachando': ['en_camino', 'cancelado'],
+  'en_camino': ['entregado', 'cancelado'],
+  'entregado': [], // Estado final
+  'cancelado': [], // Estado final
+};
+
 function isUUID(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function validateTransicionEstado(estadoActual, estadoNuevo) {
+  const errors = [];
+
+  if (!VALID_STATES.includes(estadoNuevo)) {
+    errors.push(`Estado inválido: ${estadoNuevo}. Debe ser uno de: ${VALID_STATES.join(', ')}`);
+    return { isValid: false, errors };
+  }
+
+  if (!estadoActual) {
+    errors.push('Estado actual no existe');
+    return { isValid: false, errors };
+  }
+
+  const transicionesPermitidas = VALID_TRANSITIONS[estadoActual] || [];
+  
+  if (!transicionesPermitidas.includes(estadoNuevo)) {
+    errors.push(
+      `Transición inválida de '${estadoActual}' a '${estadoNuevo}'. ` +
+      `Transiciones permitidas: ${transicionesPermitidas.length > 0 ? transicionesPermitidas.join(', ') : 'ninguna (estado final)'}`
+    );
+    return { isValid: false, errors };
+  }
+
+  return { isValid: true, errors: [] };
 }
 
 function validateCrearPedido(payload = {}) {
@@ -104,7 +140,9 @@ module.exports = {
   validateCrearPedido,
   validateActualizarPedido,
   validateProducto,
+  validateTransicionEstado,
   VALID_PRODUCT_TYPES,
   VALID_STATES,
+  VALID_TRANSITIONS,
 };
 
