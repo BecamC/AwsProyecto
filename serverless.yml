@@ -1,6 +1,5 @@
 service: pardo-pedidos-system
 
-frameworkVersion: '>=3'
 
 provider:
   name: aws
