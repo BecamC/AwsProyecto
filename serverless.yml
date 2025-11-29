@@ -206,6 +206,7 @@ functions:
             origin: '*'
             headers:
               - Content-Type
+              - Authorization
               - x-tenant-id
               - x-user-id
               - x-user-role
@@ -230,6 +231,7 @@ functions:
             origin: '*'
             headers:
               - Content-Type
+              - Authorization
               - x-tenant-id
               - x-user-id
               - x-user-role
@@ -245,6 +247,7 @@ functions:
             origin: '*'
             headers:
               - Content-Type
+              - Authorization
               - x-tenant-id
               - x-user-id
               - x-user-role
