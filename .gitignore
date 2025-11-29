@@ -16,3 +16,5 @@ node_modules
 test-frontend.html
 
 scripts/test-endpoints.sh
+
+package-lock.json
