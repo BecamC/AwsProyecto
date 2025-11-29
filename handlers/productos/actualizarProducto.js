@@ -1,10 +1,17 @@
 const { getItem, updateItem, getTimestamp } = require('../../shared/dynamodb');
 const { response } = require('../../shared/response');
+const { requireStaff } = require('../../shared/auth');
 
 const TABLA_PRODUCTOS = process.env.TABLA_PRODUCTOS;
 
 exports.handler = async (event) => {
   try {
+    // Verificar autenticación y permisos de staff
+    const auth = requireStaff(event, 'manage_products');
+    if (auth.error) {
+      return auth.error;
+    }
+    
     const tenantId = event.headers?.['x-tenant-id'] || event.headers?.['X-Tenant-Id'];
     const productoId = event.pathParameters?.producto_id;
 

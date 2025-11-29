@@ -1,12 +1,19 @@
 const { putItem, generateUUID, getTimestamp } = require('../../shared/dynamodb');
 const { response } = require('../../shared/response');
 const { validateProducto } = require('../../shared/validations');
+const { requireStaff } = require('../../shared/auth');
 
 const TABLA_PRODUCTOS = process.env.TABLA_PRODUCTOS;
 const TABLA_INVENTARIO = process.env.TABLA_INVENTARIO;
 
 exports.handler = async (event) => {
   try {
+    // Verificar autenticación y permisos de staff
+    const auth = requireStaff(event, 'manage_products');
+    if (auth.error) {
+      return auth.error;
+    }
+    
     const tenantId = event.headers?.['x-tenant-id'] || event.headers?.['X-Tenant-Id'];
     
     if (!tenantId) {

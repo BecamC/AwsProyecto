@@ -1,10 +1,17 @@
 const { getItem, putItem, getTimestamp } = require('../../shared/dynamodb');
 const { response } = require('../../shared/response');
+const { requireStaff } = require('../../shared/auth');
 
 const TABLA_INVENTARIO = process.env.TABLA_INVENTARIO;
 
 exports.handler = async (event) => {
   try {
+    // Verificar autenticación y permisos de staff
+    const auth = requireStaff(event, 'manage_inventory');
+    if (auth.error) {
+      return auth.error;
+    }
+    
     const tenantId = event.headers?.['x-tenant-id'] || event.headers?.['X-Tenant-Id'];
     
     if (!tenantId) {

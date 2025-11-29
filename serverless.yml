@@ -16,9 +16,13 @@ provider:
     TABLA_PEDIDOS: ${self:custom.tablas.pedidos}
     TABLA_INVENTARIO: ${self:custom.tablas.inventario}
     TABLA_LOGS: ${self:custom.tablas.logs}
+    TABLA_CLIENTES: ${self:custom.tablas.clientes}
+    TABLA_STAFF: ${self:custom.tablas.staff}
+    TABLA_INVITATION_CODES: ${self:custom.tablas.invitationCodes}
     SQS_PEDIDOS_URL: ${self:custom.sqsQueueUrl}
     SNS_NOTIFICACIONES_ARN: ${self:custom.snsTopicArn}
     STEP_FUNCTIONS_ARN: ${self:custom.stepFunctionsArn}
+    JWT_SECRET: ${env:JWT_SECRET, 'utec'}
   iam:
     role: arn:aws:iam::079902990209:role/LabRole
 
@@ -28,6 +32,9 @@ custom:
     pedidos: TablaPedidos-${self:provider.stage}
     inventario: TablaInventario-${self:provider.stage}
     logs: TablaLogs-${self:provider.stage}
+    clientes: ${self:provider.stage}-t_clientes
+    staff: ${self:provider.stage}-t_staff
+    invitationCodes: ${self:provider.stage}-t_invitation_codes
   snsTopicName: pardo-notificaciones-${self:provider.stage}
   sqsQueueName: cola-pedidos-${self:provider.stage}
   stepFunctionsName: FlujoProcesarPedido-${self:provider.stage}
@@ -60,6 +67,60 @@ custom:
         - ${self:custom.stepFunctionsName}
 
 functions:
+  # AUTH FUNCTIONS
+  crearUsuario:
+    handler: handlers/auth/crearUsuario.handler
+    events:
+      - http:
+          path: auth/registro
+          method: post
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+            allowCredentials: false
+
+  loginUsuario:
+    handler: handlers/auth/loginUsuario.handler
+    events:
+      - http:
+          path: auth/login
+          method: post
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+            allowCredentials: false
+
+  logoutUsuario:
+    handler: handlers/auth/logoutUsuario.handler
+    events:
+      - http:
+          path: auth/logout
+          method: post
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+            allowCredentials: false
+
+  generarInvitationCode:
+    handler: handlers/auth/generarInvitationCode.handler
+    events:
+      - http:
+          path: auth/generate-invitation
+          method: post
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+            allowCredentials: false
+
+  # PRODUCTOS
   obtenerProductos:
     handler: handlers/productos/obtenerProductos.handler
     events:
@@ -399,6 +460,49 @@ resources:
                 KeyType: RANGE
             Projection:
               ProjectionType: ALL
+
+    TablaClientes:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.tablas.clientes}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: email
+            AttributeType: S
+        KeySchema:
+          - AttributeName: email
+            KeyType: HASH
+
+    TablaStaff:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.tablas.staff}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: tenant_id_sede
+            AttributeType: S
+          - AttributeName: email
+            AttributeType: S
+        KeySchema:
+          - AttributeName: tenant_id_sede
+            KeyType: HASH
+          - AttributeName: email
+            KeyType: RANGE
+
+    TablaInvitationCodes:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.tablas.invitationCodes}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: code
+            AttributeType: S
+        KeySchema:
+          - AttributeName: code
+            KeyType: HASH
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
 
     TopicNotificaciones:
       Type: AWS::SNS::Topic

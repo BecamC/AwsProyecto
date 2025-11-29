@@ -4,6 +4,7 @@ const { sendTaskSuccess } = require('../../shared/stepfunctions');
 const { publish, buildNotificationAttributes } = require('../../shared/sns');
 const { registrarLog } = require('../../shared/logs');
 const { putEvent } = require('../../shared/eventbridge');
+const { requireStaff } = require('../../shared/auth');
 
 const TABLA_PEDIDOS = process.env.TABLA_PEDIDOS;
 const SNS_TOPIC_ARN = process.env.SNS_NOTIFICACIONES_ARN;
@@ -40,6 +41,12 @@ async function handleStepFunctionsInvocation(event) {
 }
 
 async function handleHttpInvocation(event) {
+  // Verificar autenticación y permisos de staff
+  const auth = requireStaff(event, 'update_order_status');
+  if (auth.error) {
+    return auth.error;
+  }
+  
   let body;
   try {
     body = JSON.parse(event.body || '{}');

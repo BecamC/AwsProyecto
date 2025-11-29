@@ -24,10 +24,21 @@ exports.handler = async (event) => {
       if (!pedido) {
         return response(404, { message: 'Pedido no encontrado' });
       }
+      
+      // Verificar permisos: solo el dueño o staff puede ver el pedido
+      if (!isStaff && pedido.user_id !== authenticatedUserId) {
+        return response(403, { message: 'No tienes permiso para ver este pedido' });
+      }
+      
       return response(200, { pedido });
     }
 
     if (params.usuario_id) {
+      // Solo staff puede consultar pedidos de otros usuarios
+      if (!isStaff && params.usuario_id !== authenticatedUserId) {
+        return response(403, { message: 'No tienes permiso para ver pedidos de otros usuarios' });
+      }
+      
       const queryParams = {
         TableName: TABLA_PEDIDOS,
         IndexName: 'user_id-index',
@@ -47,7 +58,23 @@ exports.handler = async (event) => {
       return response(200, { pedidos });
     }
 
-    // Consulta por tenant
+    // Consulta por tenant - solo staff puede ver todos los pedidos
+    if (!isStaff) {
+      // Si es cliente sin parámetros, retornar sus propios pedidos
+      const queryParams = {
+        TableName: TABLA_PEDIDOS,
+        IndexName: 'user_id-index',
+        KeyConditionExpression: 'user_id = :user_id',
+        ExpressionAttributeValues: {
+          ':user_id': authenticatedUserId,
+        },
+      };
+      
+      const pedidos = await query(queryParams);
+      return response(200, { pedidos });
+    }
+    
+    // Staff puede ver todos los pedidos del tenant
     const tenantQuery = {
       TableName: TABLA_PEDIDOS,
       KeyConditionExpression: 'tenant_id = :tenant_id',

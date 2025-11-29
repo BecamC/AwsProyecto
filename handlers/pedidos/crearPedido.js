@@ -4,6 +4,7 @@ const { validateCrearPedido } = require('../../shared/validations');
 const { sendMessage } = require('../../shared/sqs');
 const { registrarLog } = require('../../shared/logs');
 const { startExecution } = require('../../shared/stepfunctions');
+const { requireAuth } = require('../../shared/auth');
 
 const TABLA_PEDIDOS = process.env.TABLA_PEDIDOS;
 const TABLA_PRODUCTOS = process.env.TABLA_PRODUCTOS;
@@ -12,6 +13,15 @@ const SQS_PEDIDOS_URL = process.env.SQS_PEDIDOS_URL;
 const STEP_FUNCTIONS_ARN = process.env.STEP_FUNCTIONS_ARN;
 
 exports.handler = async (event) => {
+  // Verificar autenticación
+  const auth = requireAuth(event);
+  if (auth.error) {
+    return auth.error;
+  }
+  
+  // Obtener user_id del token
+  const usuarioId = auth.payload.user_id;
+  
   const tenantId = event.headers?.['x-tenant-id'] || event.headers?.['X-Tenant-Id'];
   if (!tenantId) {
     return response(400, { message: 'x-tenant-id header es requerido' });
@@ -28,6 +38,10 @@ exports.handler = async (event) => {
   if (!validation.isValid) {
     return response(400, { message: 'Datos inválidos', detalles: validation.errors });
   }
+  
+  // Usar usuario_id del token JWT en lugar del payload
+  // Esto previene que usuarios creen pedidos a nombre de otros
+  payload.usuario_id = usuarioId;
 
   const pedidoId = generateUUID();
   const fechaInicio = getTimestamp();
