@@ -3,6 +3,7 @@ const { response } = require('../../shared/response');
 const { sendTaskSuccess } = require('../../shared/stepfunctions');
 const { publish, buildNotificationAttributes } = require('../../shared/sns');
 const { requireStaff } = require('../../shared/auth');
+const { registrarCambioEstado } = require('../../shared/estados');
 
 const TABLA_PEDIDOS = process.env.TABLA_PEDIDOS;
 const SNS_TOPIC_ARN = process.env.SNS_NOTIFICACIONES_ARN;
@@ -71,6 +72,19 @@ async function handleHttpInvocation(event) {
       ':fecha': fecha,
     },
     ReturnValues: 'ALL_NEW',
+  });
+
+  // Registrar cambio de estado en TablaEstados
+  await registrarCambioEstado({
+    pedido_id: pedidoId,
+    tenant_id: tenantId,
+    estado_anterior: pedido.estado, // recogiendo
+    estado_nuevo: 'en_camino',
+    usuario_id: motorizadoId,
+    usuario_tipo: 'staff',
+    motivo: 'Motorizado confirma recogida del pedido',
+    start_time: pedido.fecha_actualizacion || pedido.fecha_inicio,
+    end_time: fecha,
   });
 
   if (SNS_TOPIC_ARN) {

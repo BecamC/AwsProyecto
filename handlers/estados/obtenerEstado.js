@@ -38,8 +38,20 @@ exports.handler = async (event) => {
       return response(404, { message: 'Pedido no encontrado' });
     }
 
+    // Verificar permisos: usuario solo puede ver su propio pedido
     if (!isStaff && pedido.user_id !== authenticatedUserId) {
       return response(403, { message: 'No tienes permiso para ver este pedido' });
+    }
+    
+    // Si es trabajador (no admin), verificar que esté asignado al pedido
+    if (isStaff && payload.staff_tier === 'trabajador') {
+      const estaAsignado = 
+        pedido.chef_id === authenticatedUserId || 
+        pedido.motorizado_id === authenticatedUserId;
+      
+      if (!estaAsignado) {
+        return response(403, { message: 'No tienes permiso para ver este pedido. No está asignado a ti.' });
+      }
     }
 
     const estadoActual = {

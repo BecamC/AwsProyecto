@@ -5,6 +5,7 @@ const { publish, buildNotificationAttributes } = require('../../shared/sns');
 const { registrarLog } = require('../../shared/logs');
 const { putEvent } = require('../../shared/eventbridge');
 const { requireStaff } = require('../../shared/auth');
+const { registrarCambioEstado } = require('../../shared/estados');
 
 const TABLA_PEDIDOS = process.env.TABLA_PEDIDOS;
 const SNS_TOPIC_ARN = process.env.SNS_NOTIFICACIONES_ARN;
@@ -23,17 +24,41 @@ async function handleStepFunctionsInvocation(event) {
     throw new Error('Evento inválido para pedidoDespachado');
   }
 
+  // Obtener pedido actual para registrar estado anterior
+  const pedido = await getItem(TABLA_PEDIDOS, {
+    tenant_id: tenantId,
+    pedido_id: pedidoId,
+  });
+
   console.log(`[INFO Step Functions pedidoDespachado] Guardando despacho_task_token para pedido ${pedidoId}`);
   
+  const timestamp = getTimestamp();
+
   await updateItem({
     TableName: TABLA_PEDIDOS,
     Key: { tenant_id: tenantId, pedido_id: pedidoId },
-    UpdateExpression: 'SET despacho_task_token = :token, estado = :estado',
+    UpdateExpression: 'SET despacho_task_token = :token, estado = :estado, fecha_actualizacion = :fecha',
     ExpressionAttributeValues: {
       ':token': taskToken,
       ':estado': 'despachando',
+      ':fecha': timestamp,
     },
   });
+
+  // Registrar cambio de estado en TablaEstados
+  if (pedido) {
+    await registrarCambioEstado({
+      pedido_id: pedidoId,
+      tenant_id: tenantId,
+      estado_anterior: pedido.estado, // preparando
+      estado_nuevo: 'despachando',
+      usuario_id: 'system',
+      usuario_tipo: 'staff',
+      motivo: 'Pedido en proceso de despacho',
+      start_time: pedido.fecha_actualizacion || pedido.fecha_inicio,
+      end_time: timestamp,
+    });
+  }
   
   console.log(`[INFO Step Functions pedidoDespachado] despacho_task_token guardado exitosamente para pedido ${pedidoId}`);
 
@@ -104,6 +129,19 @@ async function handleHttpInvocation(event) {
       ':fecha': fecha,
     },
     ReturnValues: 'ALL_NEW',
+  });
+
+  // Registrar cambio de estado en TablaEstados
+  await registrarCambioEstado({
+    pedido_id: pedidoId,
+    tenant_id: tenantId,
+    estado_anterior: pedido.estado,
+    estado_nuevo: 'despachado',
+    usuario_id: body.despachador_id || 'system',
+    usuario_tipo: 'staff',
+    motivo: 'Pedido despachado y listo para recogida',
+    start_time: pedido.fecha_actualizacion || pedido.fecha_inicio,
+    end_time: fecha,
   });
 
   if (SNS_TOPIC_ARN) {

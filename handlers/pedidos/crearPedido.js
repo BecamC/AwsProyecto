@@ -5,10 +5,12 @@ const { sendMessage } = require('../../shared/sqs');
 const { registrarLog } = require('../../shared/logs');
 const { startExecution } = require('../../shared/stepfunctions');
 const { requireAuth } = require('../../shared/auth');
+const { registrarCambioEstado } = require('../../shared/estados');
 
 const TABLA_PEDIDOS = process.env.TABLA_PEDIDOS;
 const TABLA_PRODUCTOS = process.env.TABLA_PRODUCTOS;
 const TABLA_INVENTARIO = process.env.TABLA_INVENTARIO;
+const TABLA_ESTADOS = process.env.TABLA_ESTADOS;
 const SQS_PEDIDOS_URL = process.env.SQS_PEDIDOS_URL;
 const STEP_FUNCTIONS_ARN = process.env.STEP_FUNCTIONS_ARN;
 
@@ -197,6 +199,19 @@ exports.handler = async (event) => {
     console.log('[DEBUG] Intentando guardar pedido en DynamoDB...');
     await putItem(TABLA_PEDIDOS, pedido);
     console.log('[DEBUG] Pedido guardado exitosamente en DynamoDB');
+
+    // Registrar estado inicial en TablaEstados
+    await registrarCambioEstado({
+      pedido_id: pedidoId,
+      tenant_id: tenantId,
+      estado_anterior: null,
+      estado_nuevo: 'pendiente',
+      usuario_id: payload.usuario_id,
+      usuario_tipo: 'cliente',
+      motivo: 'Pedido creado',
+      start_time: null,
+      end_time: fechaInicio,
+    });
 
     // Iniciar Step Functions inmediatamente después de crear el pedido
     if (STEP_FUNCTIONS_ARN) {

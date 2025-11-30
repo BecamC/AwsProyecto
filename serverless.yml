@@ -257,6 +257,20 @@ functions:
               - x-user-role
             allowCredentials: false
 
+  misAsignaciones:
+    handler: handlers/pedidos/misAsignaciones.handler
+    events:
+      - http:
+          path: pedido/mis-asignaciones
+          method: get
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - x-tenant-id
+            allowCredentials: false
+
   consultarInventario:
     handler: handlers/inventario/consultarInventario.handler
     events:
@@ -297,16 +311,6 @@ functions:
             detail-type:
               - Pedido Creado
 
-  preparandoComida:
-    handler: handlers/workflow/preparandoComida.handler
-    events:
-      - eventBridge:
-          pattern:
-            source:
-              - stepfunctions.workflow
-            detail-type:
-              - Preparando Comida
-
   chefConfirma:
     handler: handlers/workflow/chefConfirma.handler
     events:
@@ -321,16 +325,6 @@ functions:
               - x-user-id
               - x-user-role
             allowCredentials: false
-
-  despachandoComida:
-    handler: handlers/workflow/despachandoComida.handler
-    events:
-      - eventBridge:
-          pattern:
-            source:
-              - stepfunctions.workflow
-            detail-type:
-              - Despachando Comida
 
   pedidoDespachado:
     handler: handlers/workflow/pedidoDespachado.handler
@@ -371,9 +365,6 @@ functions:
               - x-user-id
               - x-user-role
             allowCredentials: false
-
-  pedidoEnCamino:
-    handler: handlers/workflow/pedidoEnCamino.handler
 
   clienteRecibeComida:
     handler: handlers/workflow/clienteRecibeComida.handler

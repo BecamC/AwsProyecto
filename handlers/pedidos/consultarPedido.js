@@ -64,6 +64,17 @@ exports.handler = async (event) => {
         return response(403, { message: 'No tienes permiso para ver este pedido' });
       }
       
+      // Si es trabajador (no admin), verificar que esté asignado al pedido
+      if (isStaff && payload.staff_tier === 'trabajador') {
+        const estaAsignado = 
+          pedido.chef_id === authenticatedUserId || 
+          pedido.motorizado_id === authenticatedUserId;
+        
+        if (!estaAsignado) {
+          return response(403, { message: 'No tienes permiso para ver este pedido. No está asignado a ti.' });
+        }
+      }
+      
       return response(200, { pedido });
     }
 
@@ -121,7 +132,7 @@ exports.handler = async (event) => {
       return response(200, { pedidos });
     }
     
-    // Staff puede ver todos los pedidos del tenant actual
+    // Staff puede ver pedidos según su tier
     const tenantQuery = {
       TableName: TABLA_PEDIDOS,
       KeyConditionExpression: 'tenant_id = :tenant_id',
@@ -131,7 +142,15 @@ exports.handler = async (event) => {
     };
 
     const result = await query(tenantQuery);
-    const pedidos = result.Items || [];
+    let pedidos = result.Items || [];
+    
+    // Si es trabajador (no admin), filtrar solo los pedidos asignados a él
+    if (payload.staff_tier === 'trabajador') {
+      pedidos = pedidos.filter(p => 
+        p.chef_id === authenticatedUserId || 
+        p.motorizado_id === authenticatedUserId
+      );
+    }
     
     return response(200, { pedidos });
   } catch (error) {

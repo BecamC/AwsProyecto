@@ -1,5 +1,6 @@
-const { updateItem, getTimestamp } = require('../../shared/dynamodb');
+const { updateItem, getItem, getTimestamp } = require('../../shared/dynamodb');
 const { publish, buildNotificationAttributes } = require('../../shared/sns');
+const { registrarCambioEstado } = require('../../shared/estados');
 
 const TABLA_PEDIDOS = process.env.TABLA_PEDIDOS;
 const SNS_TOPIC_ARN = process.env.SNS_NOTIFICACIONES_ARN;
@@ -14,6 +15,12 @@ exports.handler = async (event) => {
     return { status: 'missing-data' };
   }
 
+  // Obtener pedido actual para conocer el estado anterior
+  const pedido = await getItem(TABLA_PEDIDOS, {
+    tenant_id: tenantId,
+    pedido_id: pedidoId,
+  });
+
   const fecha = getTimestamp();
   await updateItem({
     TableName: TABLA_PEDIDOS,
@@ -24,6 +31,21 @@ exports.handler = async (event) => {
       ':fin': fecha,
     },
   });
+
+  // Registrar cambio de estado en TablaEstados
+  if (pedido) {
+    await registrarCambioEstado({
+      pedido_id: pedidoId,
+      tenant_id: tenantId,
+      estado_anterior: pedido.estado,
+      estado_nuevo: 'entregado',
+      usuario_id: pedido.motorizado_id || 'system',
+      usuario_tipo: 'staff',
+      motivo: 'Pedido entregado al cliente',
+      start_time: pedido.fecha_actualizacion || pedido.fecha_inicio,
+      end_time: fecha,
+    });
+  }
 
   if (SNS_TOPIC_ARN) {
     await publish({

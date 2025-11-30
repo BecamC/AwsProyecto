@@ -5,6 +5,7 @@ const { publish, buildNotificationAttributes } = require('../../shared/sns');
 const { registrarLog } = require('../../shared/logs');
 const { putEvent } = require('../../shared/eventbridge');
 const { requireStaff } = require('../../shared/auth');
+const { registrarCambioEstado } = require('../../shared/estados');
 
 const TABLA_PEDIDOS = process.env.TABLA_PEDIDOS;
 const SNS_TOPIC_ARN = process.env.SNS_NOTIFICACIONES_ARN;
@@ -120,23 +121,36 @@ async function handleHttpInvocation(event) {
   }
 
   if (!aprobado) {
-  await sendTaskSuccess({
-    taskToken: pedido.chef_task_token,
-    output: {
-      tenant_id: tenantId,
-      pedido_id: pedidoId,
-      estado: 'rechazado',
-    },
-  });
+    await sendTaskSuccess({
+      taskToken: pedido.chef_task_token,
+      output: {
+        tenant_id: tenantId,
+        pedido_id: pedidoId,
+        estado: 'rechazado',
+      },
+    });
 
     await updateItem({
       TableName: TABLA_PEDIDOS,
       Key: { tenant_id: tenantId, pedido_id: pedidoId },
       UpdateExpression: 'REMOVE chef_task_token SET estado = :estado, fecha_actualizacion = :fecha',
       ExpressionAttributeValues: {
-        ':estado': 'cancelado',
+        ':estado': 'rechazado',
         ':fecha': getTimestamp(),
       },
+    });
+
+    // Registrar cambio de estado en TablaEstados
+    await registrarCambioEstado({
+      pedido_id: pedidoId,
+      tenant_id: tenantId,
+      estado_anterior: pedido.estado,
+      estado_nuevo: 'rechazado',
+      usuario_id: chefId,
+      usuario_tipo: 'staff',
+      motivo: 'Pedido rechazado por el chef',
+      start_time: pedido.fecha_inicio,
+      end_time: getTimestamp(),
     });
 
     return response(200, { message: 'Pedido rechazado por el chef' });
@@ -178,6 +192,19 @@ async function handleHttpInvocation(event) {
       ':fecha': fecha,
     },
     ReturnValues: 'ALL_NEW',
+  });
+
+  // Registrar cambio de estado en TablaEstados
+  await registrarCambioEstado({
+    pedido_id: pedidoId,
+    tenant_id: tenantId,
+    estado_anterior: pedido.estado,
+    estado_nuevo: 'preparando',
+    usuario_id: chefId,
+    usuario_tipo: 'staff',
+    motivo: 'Chef confirma preparación del pedido',
+    start_time: pedido.fecha_inicio, // Tiempo de inicio del estado anterior
+    end_time: fecha, // Tiempo actual (fin del estado anterior)
   });
 
   await registrarLog({
