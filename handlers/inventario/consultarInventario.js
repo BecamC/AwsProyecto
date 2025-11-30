@@ -1,10 +1,17 @@
 const { query } = require('../../shared/dynamodb');
 const { response } = require('../../shared/response');
+const { requireStaff } = require('../../shared/auth');
 
 const TABLA_INVENTARIO = process.env.TABLA_INVENTARIO;
 
 exports.handler = async (event) => {
   try {
+    // Verificar que sea staff (solo staff puede consultar inventario)
+    const auth = requireStaff(event);
+    if (auth.error) {
+      return auth.error;
+    }
+    
     const tenantId = event.headers?.['x-tenant-id'] || event.headers?.['X-Tenant-Id'];
     if (!tenantId) {
       return response(400, { message: 'x-tenant-id header es requerido' });
@@ -25,13 +32,14 @@ exports.handler = async (event) => {
       inventario = item ? [item] : [];
     } else {
       // Consultar todos los productos del tenant
-      inventario = await query({
+      const result = await query({
         TableName: TABLA_INVENTARIO,
         KeyConditionExpression: 'tenant_id = :tenant_id',
         ExpressionAttributeValues: {
           ':tenant_id': tenantId
         }
       });
+      inventario = result.Items || [];
     }
 
     return response(200, { inventario });
