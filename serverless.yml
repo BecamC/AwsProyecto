@@ -19,6 +19,7 @@ provider:
     TABLA_CLIENTES: ${self:custom.tablas.clientes}
     TABLA_STAFF: ${self:custom.tablas.staff}
     TABLA_INVITATION_CODES: ${self:custom.tablas.invitationCodes}
+    TABLA_ESTADOS: ${self:custom.tablas.estados}
     SQS_PEDIDOS_URL: ${self:custom.sqsQueueUrl}
     SNS_NOTIFICACIONES_ARN: ${self:custom.snsTopicArn}
     STEP_FUNCTIONS_ARN: ${self:custom.stepFunctionsArn}
@@ -35,6 +36,7 @@ custom:
     clientes: ${self:provider.stage}-t_clientes
     staff: ${self:provider.stage}-t_staff
     invitationCodes: ${self:provider.stage}-t_invitation_codes
+    estados: ${self:provider.stage}-t_estados
   snsTopicName: pardo-notificaciones-${self:provider.stage}
   sqsQueueName: cola-pedidos-${self:provider.stage}
   stepFunctionsName: FlujoProcesarPedido-${self:provider.stage}
@@ -407,6 +409,39 @@ functions:
               - x-user-role
             allowCredentials: false
 
+  # ESTADOS
+  actualizarEstado:
+    handler: handlers/estados/actualizarEstado.handler
+    events:
+      - http:
+          path: estados/actualizar
+          method: post
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - x-tenant-id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
+
+  obtenerEstado:
+    handler: handlers/estados/obtenerEstado.handler
+    events:
+      - http:
+          path: estados/obtener
+          method: get
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - x-tenant-id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
+
 resources:
   Resources:
     TablaProductos:
@@ -539,6 +574,33 @@ resources:
         TimeToLiveSpecification:
           AttributeName: ttl
           Enabled: true
+
+    TablaEstados:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.tablas.estados}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: pedido_id
+            AttributeType: S
+          - AttributeName: timestamp
+            AttributeType: S
+          - AttributeName: tenant_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: pedido_id
+            KeyType: HASH
+          - AttributeName: timestamp
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: tenant_id-index
+            KeySchema:
+              - AttributeName: tenant_id
+                KeyType: HASH
+              - AttributeName: timestamp
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
 
     TopicNotificaciones:
       Type: AWS::SNS::Topic

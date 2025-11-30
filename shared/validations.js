@@ -1,5 +1,15 @@
 const VALID_PRODUCT_TYPES = ['combo', 'single', 'promotion'];
-const VALID_STATES = ['pendiente', 'preparando', 'despachando', 'en_camino', 'entregado', 'cancelado'];
+const VALID_STATES = [
+  'pendiente',
+  'preparando',
+  'despachando',
+  'despachado',
+  'recogiendo',
+  'en_camino',
+  'entregado',
+  'cancelado',
+  'rechazado'
+];
 
 function isUUID(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -58,7 +68,6 @@ function validateProducto(data = {}, isUpdate = false) {
   if (!data.tenant_id) {
     errors.push('tenant_id es requerido');
   }
-  // producto_id solo es requerido en actualizaciones, no en creaciones
   if (isUpdate && !data.producto_id) {
     errors.push('producto_id es requerido para actualizar');
   }
@@ -68,13 +77,11 @@ function validateProducto(data = {}, isUpdate = false) {
   if (!data.tipo_producto) {
     errors.push('tipo_producto es requerido');
   }
-  // Ya no limitamos los tipos, aceptamos cualquier tipo_producto
   if (data.precio_producto === undefined || data.precio_producto === null || data.precio_producto === '') {
     errors.push('precio_producto es requerido');
   } else if (typeof data.precio_producto !== 'number' || data.precio_producto <= 0) {
     errors.push('precio_producto debe ser un número mayor a cero');
   }
-  // Validar combo_items solo si el tipo es combo
   if (data.tipo_producto === 'combo') {
     if (!Array.isArray(data.combo_items) || data.combo_items.length === 0) {
       errors.push('combo_items debe contener al menos un producto cuando tipo_producto es combo');
