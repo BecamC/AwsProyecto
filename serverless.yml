@@ -374,6 +374,39 @@ functions:
   clienteRecibeComida:
     handler: handlers/workflow/clienteRecibeComida.handler
 
+  # ASIGNACIONES
+  asignarTrabajador:
+    handler: handlers/asignaciones/asignarTrabajador.handler
+    events:
+      - http:
+          path: asignaciones/asignar
+          method: post
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - x-tenant-id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
+
+  obtenerTrabajador:
+    handler: handlers/asignaciones/obtenerTrabajador.handler
+    events:
+      - http:
+          path: asignaciones/obtener
+          method: get
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - x-tenant-id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
+
 resources:
   Resources:
     TablaProductos:
