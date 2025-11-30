@@ -20,6 +20,7 @@ provider:
     TABLA_STAFF: ${self:custom.tablas.staff}
     TABLA_INVITATION_CODES: ${self:custom.tablas.invitationCodes}
     TABLA_ESTADOS: ${self:custom.tablas.estados}
+    TABLA_KPIS: ${self:custom.tablas.kpis}
     SQS_PEDIDOS_URL: ${self:custom.sqsQueueUrl}
     SNS_NOTIFICACIONES_ARN: ${self:custom.snsTopicArn}
     STEP_FUNCTIONS_ARN: ${self:custom.stepFunctionsArn}
@@ -37,6 +38,7 @@ custom:
     staff: ${self:provider.stage}-t_staff
     invitationCodes: ${self:provider.stage}-t_invitation_codes
     estados: ${self:provider.stage}-t_estados
+    kpis: ${self:provider.stage}-t_kpis
   snsTopicName: pardo-notificaciones-${self:provider.stage}
   sqsQueueName: cola-pedidos-${self:provider.stage}
   stepFunctionsName: FlujoProcesarPedido-${self:provider.stage}
@@ -442,6 +444,13 @@ functions:
               - x-user-role
             allowCredentials: false
 
+  calcularKPIs:
+    handler: handlers/kpis/calcularKPIs.handler
+    events:
+      - schedule:
+          rate: rate(5 minutes)
+          enabled: true
+
 resources:
   Resources:
     TablaProductos:
@@ -596,6 +605,33 @@ resources:
           - IndexName: tenant_id-index
             KeySchema:
               - AttributeName: tenant_id
+                KeyType: HASH
+              - AttributeName: timestamp
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
+    TablaKPIs:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.tablas.kpis}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: tenant_id
+            AttributeType: S
+          - AttributeName: fecha
+            AttributeType: S
+          - AttributeName: timestamp
+            AttributeType: S
+        KeySchema:
+          - AttributeName: tenant_id
+            KeyType: HASH
+          - AttributeName: fecha
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: fecha-index
+            KeySchema:
+              - AttributeName: fecha
                 KeyType: HASH
               - AttributeName: timestamp
                 KeyType: RANGE
