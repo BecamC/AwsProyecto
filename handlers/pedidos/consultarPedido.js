@@ -133,6 +133,38 @@ exports.handler = async (event) => {
     }
     
     // Staff puede ver pedidos según su tier
+    const isAdmin = payload.staff_tier === 'admin';
+    
+    // Si es admin, puede ver pedidos de todas las sedes
+    if (isAdmin) {
+      const sedes = ['pardo_miraflores', 'pardo_surco'];
+      let todosLosPedidos = [];
+      
+      // Consultar pedidos de todas las sedes
+      for (const sede of sedes) {
+        const tenantQuery = {
+          TableName: TABLA_PEDIDOS,
+          KeyConditionExpression: 'tenant_id = :tenant_id',
+          ExpressionAttributeValues: {
+            ':tenant_id': sede,
+          },
+        };
+        
+        const result = await query(tenantQuery);
+        if (result.Items && result.Items.length > 0) {
+          todosLosPedidos = todosLosPedidos.concat(result.Items);
+        }
+      }
+      
+      return response(200, { 
+        pedidos: todosLosPedidos,
+        total: todosLosPedidos.length,
+        sedes_consultadas: sedes,
+        nota: 'Admin puede ver pedidos de todas las sedes'
+      });
+    }
+    
+    // Si es trabajador, solo ve pedidos de su sede asignados a él
     const tenantQuery = {
       TableName: TABLA_PEDIDOS,
       KeyConditionExpression: 'tenant_id = :tenant_id',
@@ -144,15 +176,18 @@ exports.handler = async (event) => {
     const result = await query(tenantQuery);
     let pedidos = result.Items || [];
     
-    // Si es trabajador (no admin), filtrar solo los pedidos asignados a él
-    if (payload.staff_tier === 'trabajador') {
-      pedidos = pedidos.filter(p => 
-        p.chef_id === authenticatedUserId || 
-        p.motorizado_id === authenticatedUserId
-      );
-    }
+    // Filtrar solo los pedidos asignados al trabajador
+    pedidos = pedidos.filter(p => 
+      p.chef_id === authenticatedUserId || 
+      p.motorizado_id === authenticatedUserId
+    );
     
-    return response(200, { pedidos });
+    return response(200, { 
+      pedidos,
+      total: pedidos.length,
+      sede: tenantId,
+      nota: 'Trabajador solo ve pedidos asignados de su sede'
+    });
   } catch (error) {
     console.error('Error consultando pedidos', error);
     return response(500, { message: 'Error interno al consultar pedidos' });

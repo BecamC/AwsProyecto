@@ -1,0 +1,29 @@
+{
+  "tenant_id_sede": "pardo_miraflores",
+  "email": "admin@pardos.com",
+  "user_id": "00000000-0000-0000-0000-000000000001",
+  "password": "$2a$10$rC3lBCDI5qa6lyaBmVnD.eBlFcQ/0OhDvU5ym0NtEi1YeiSbESmgi",
+  "name": "Admin Principal",
+  "user_type": "staff",
+  "staff_tier": "admin",
+  "permissions": [
+    "view_products",
+    "view_orders",
+    "update_order_status",
+    "view_customers",
+    "manage_products",
+    "manage_orders",
+    "manage_staff_trabajador",
+    "view_reports",
+    "manage_inventory",
+    "generate_invitation_codes",
+    "manage_all_profiles"
+  ],
+  "is_active": true,
+  "is_verified": true,
+  "phone": "999999999",
+  "created_at": "2025-11-29T00:00:00.000Z",
+  "updated_at": "2025-11-29T00:00:00.000Z",
+  "last_login": null
+}
+
