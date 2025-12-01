@@ -82,6 +82,14 @@ exports.handler = async (event) => {
       if (pedido.user_id !== authenticatedUserId) {
         return response(403, { message: 'No tienes permiso para actualizar este pedido' });
       }
+      // Los clientes NO pueden marcar como entregado usando este endpoint
+      // Deben usar el endpoint específico POST /pedido/confirmar-recepcion
+      if (estado === 'entregado') {
+        return response(403, { 
+          message: 'Para confirmar la recepción de tu pedido, usa el botón "Confirmar Recepción" en la página de detalles del pedido',
+          endpoint_correcto: 'POST /pedido/confirmar-recepcion'
+        });
+      }
       if (estado !== 'cancelado' || pedido.estado !== 'pendiente') {
         return response(403, { 
           message: 'Solo puedes cancelar pedidos pendientes' 

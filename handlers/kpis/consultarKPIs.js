@@ -128,66 +128,82 @@ exports.handler = async (event) => {
       fecha: 'GLOBAL'
     });
 
-    // Si no hay un KPI 'GLOBAL' precalculado, agregarlos manualmente
+    // Si no hay un KPI 'GLOBAL' precalculado, calcularlo directamente desde los pedidos actuales
     if (!kpiData) {
-      console.log('No se encontró KPI GLOBAL, agregando KPIs diarios...');
-      const kpisQuery = {
-        TableName: TABLA_KPIS,
-        KeyConditionExpression: 'tenant_id = :tenant_id',
-        ExpressionAttributeValues: {
-          ':tenant_id': tenantId
-        }
-      };
+      console.log('No se encontró KPI GLOBAL, calculando desde pedidos actuales...');
+      
+      // Importar la función de cálculo global
+      const calcularKPIsGlobalesParaTenant = require('./calcularKPIs').calcularKPIsGlobalesParaTenant;
+      
+      try {
+        // Calcular KPIs globales directamente desde los pedidos actuales
+        // Esto incluirá TODOS los pedidos pendientes, independientemente de cuándo fueron creados
+        const kpiGlobalCalculado = await calcularKPIsGlobalesParaTenant(tenantId);
+        
+        if (kpiGlobalCalculado) {
+          console.log('✅ KPI GLOBAL calculado exitosamente desde pedidos actuales');
+          console.log('📊 Estados calculados:', kpiGlobalCalculado.estados_pedidos);
+          kpiData = kpiGlobalCalculado;
+        } else {
+          console.log('⚠️ No se pudo calcular KPI GLOBAL (no hay pedidos), usando fallback...');
+          // Fallback: agregar KPIs diarios si no se puede calcular (pero esto no incluirá pendientes de días anteriores)
+          const kpisQuery = {
+            TableName: TABLA_KPIS,
+            KeyConditionExpression: 'tenant_id = :tenant_id',
+            ExpressionAttributeValues: {
+              ':tenant_id': tenantId
+            }
+          };
 
-      const kpisResult = await query(kpisQuery);
-      const todosLosKPIs = kpisResult.Items || [];
+          const kpisResult = await query(kpisQuery);
+          const todosLosKPIs = kpisResult.Items || [];
 
-      // Filtrar solo los KPIs diarios (excluir 'GLOBAL')
-      const dailyKpis = todosLosKPIs.filter(k => k.fecha !== 'GLOBAL');
+          // Filtrar solo los KPIs diarios (excluir 'GLOBAL')
+          const dailyKpis = todosLosKPIs.filter(k => k.fecha !== 'GLOBAL');
 
-      if (dailyKpis.length === 0) {
-      return response(200, {
-        tenant_id: tenantId,
-        fecha: null,
-        numero_pedidos: 0,
-        ingresos_dia: 0,
-        ticket_promedio: 0,
-        top_productos: [],
-        estados_pedidos: {
-          completados: 0,
-          cancelados: 0,
-          pendientes: 0,
-          preparando: 0,
-          despachando: 0,
-          en_camino: 0,
-          entregado: 0,
-          rechazado: 0
-        },
-        tasa_exito: 0,
-        ingresos_por_hora: Array(24).fill(0),
-        metodos_pago: [],
-        message: 'No hay KPIs calculados'
-      });
-    }
+          if (dailyKpis.length === 0) {
+            return response(200, {
+              tenant_id: tenantId,
+              fecha: null,
+              numero_pedidos: 0,
+              ingresos_dia: 0,
+              ticket_promedio: 0,
+              top_productos: [],
+              estados_pedidos: {
+                completados: 0,
+                cancelados: 0,
+                pendientes: 0,
+                preparando: 0,
+                despachando: 0,
+                en_camino: 0,
+                entregado: 0,
+                rechazado: 0
+              },
+              tasa_exito: 0,
+              ingresos_por_hora: Array(24).fill(0),
+              metodos_pago: [],
+              message: 'No hay KPIs calculados'
+            });
+          }
 
-    // Agregar todos los KPIs
-    let totalPedidos = 0;
-    let totalIngresos = 0;
-    const productosMap = {};
-    const estadosAgregados = {
-      completados: 0,
-      cancelados: 0,
-      pendientes: 0,
-      preparando: 0,
-      despachando: 0,
-      en_camino: 0,
-      entregado: 0,
-      rechazado: 0
-    };
-    const ingresosPorHora = Array(24).fill(0);
-    const metodosPagoMap = {};
+          // Agregar todos los KPIs diarios (fallback - no incluye pendientes de días anteriores)
+          let totalPedidos = 0;
+          let totalIngresos = 0;
+          const productosMap = {};
+          const estadosAgregados = {
+            completados: 0,
+            cancelados: 0,
+            pendientes: 0,
+            preparando: 0,
+            despachando: 0,
+            en_camino: 0,
+            entregado: 0,
+            rechazado: 0
+          };
+          const ingresosPorHora = Array(24).fill(0);
+          const metodosPagoMap = {};
 
-      dailyKpis.forEach(kpi => {
+          dailyKpis.forEach(kpi => {
       totalPedidos += kpi.numero_pedidos || 0;
       totalIngresos += kpi.ingresos_dia || 0;
 
@@ -250,44 +266,69 @@ exports.handler = async (event) => {
           metodosPagoMap[metodoKey].cantidad += metodo.cantidad || 0;
           metodosPagoMap[metodoKey].ingresos += metodo.ingresos || 0;
         });
+          }
+        });
+
+        // Calcular top productos
+        const topProductos = Object.values(productosMap)
+          .sort((a, b) => b.cantidad_vendida - a.cantidad_vendida)
+          .slice(0, 3);
+
+        // Calcular métodos de pago con porcentajes
+        const metodosPagoArray = Object.values(metodosPagoMap).map(mp => ({
+          ...mp,
+          ingresos: Number(mp.ingresos.toFixed(2)),
+          porcentaje_cantidad: totalPedidos > 0 ? Number(((mp.cantidad / totalPedidos) * 100).toFixed(2)) : 0,
+          porcentaje_ingresos: totalIngresos > 0 ? Number(((mp.ingresos / totalIngresos) * 100).toFixed(2)) : 0,
+        }));
+
+        const ticketPromedio = totalPedidos > 0 ? totalIngresos / totalPedidos : 0;
+        const tasaExito = totalPedidos > 0 ? (estadosAgregados.completados / totalPedidos) * 100 : 0;
+
+        // Formatear ingresos_por_hora como array de objetos para el frontend
+        const ingresosPorHoraFormateado = ingresosPorHora.map((ingreso, hora) => ({
+          hora: hora,
+          hora_formato: `${String(hora).padStart(2, '0')}:00`,
+          ingresos: Number(ingreso.toFixed(2))
+        }));
+
+        return response(200, {
+          tenant_id: tenantId,
+          fecha: null, // null indica que es agregado global
+          numero_pedidos: totalPedidos,
+          ingresos_dia: Number(totalIngresos.toFixed(2)),
+          ticket_promedio: Number(ticketPromedio.toFixed(2)),
+          top_productos: topProductos,
+          estados_pedidos: estadosAgregados,
+          tasa_exito: Number(tasaExito.toFixed(2)),
+          ingresos_por_hora: ingresosPorHoraFormateado,
+          metodos_pago: metodosPagoArray
+        });
+        }
+      } catch (error) {
+        console.error('Error calculando KPI GLOBAL:', error);
+        // Si falla el cálculo, retornar datos vacíos
+        return response(200, {
+          tenant_id: tenantId,
+          fecha: null,
+          numero_pedidos: 0,
+          ingresos_dia: 0,
+          ticket_promedio: 0,
+          top_productos: [],
+          estados_pedidos: {
+            completados: 0, cancelados: 0, pendientes: 0, preparando: 0,
+            despachando: 0, en_camino: 0, entregado: 0, rechazado: 0,
+          },
+          tasa_exito: 0,
+          ingresos_por_hora: Array.from({ length: 24 }, (_, i) => ({
+            hora: i,
+            hora_formato: `${String(i).padStart(2, '0')}:00`,
+            ingresos: 0
+          })),
+          metodos_pago: [],
+          message: 'Error calculando KPIs globales'
+        });
       }
-    });
-
-    // Calcular top productos
-    const topProductos = Object.values(productosMap)
-      .sort((a, b) => b.cantidad_vendida - a.cantidad_vendida)
-      .slice(0, 3);
-
-    // Calcular métodos de pago con porcentajes
-    const metodosPagoArray = Object.values(metodosPagoMap).map(mp => ({
-      ...mp,
-      ingresos: Number(mp.ingresos.toFixed(2)),
-      porcentaje_cantidad: totalPedidos > 0 ? Number(((mp.cantidad / totalPedidos) * 100).toFixed(2)) : 0,
-      porcentaje_ingresos: totalIngresos > 0 ? Number(((mp.ingresos / totalIngresos) * 100).toFixed(2)) : 0,
-    }));
-
-    const ticketPromedio = totalPedidos > 0 ? totalIngresos / totalPedidos : 0;
-    const tasaExito = totalPedidos > 0 ? (estadosAgregados.completados / totalPedidos) * 100 : 0;
-
-    // Formatear ingresos_por_hora como array de objetos para el frontend
-    const ingresosPorHoraFormateado = ingresosPorHora.map((ingreso, hora) => ({
-      hora: hora,
-      hora_formato: `${String(hora).padStart(2, '0')}:00`,
-      ingresos: Number(ingreso.toFixed(2))
-    }));
-
-      return response(200, {
-        tenant_id: tenantId,
-        fecha: null, // null indica que es agregado global
-        numero_pedidos: totalPedidos,
-        ingresos_dia: Number(totalIngresos.toFixed(2)),
-        ticket_promedio: Number(ticketPromedio.toFixed(2)),
-        top_productos: topProductos,
-        estados_pedidos: estadosAgregados,
-        tasa_exito: Number(tasaExito.toFixed(2)),
-        ingresos_por_hora: ingresosPorHoraFormateado,
-        metodos_pago: metodosPagoArray
-      });
     }
 
     // Si existe el KPI global, usarlo directamente

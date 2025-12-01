@@ -462,6 +462,9 @@ async function calcularKPIsGlobalesParaTenant(tenantId) {
   return kpiGlobal;
 }
 
+// Exportar la función para uso en otros handlers
+exports.calcularKPIsGlobalesParaTenant = calcularKPIsGlobalesParaTenant;
+
 exports.handler = async (event) => {
   try {
     console.log('Evento recibido:', JSON.stringify(event));

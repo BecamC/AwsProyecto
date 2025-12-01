@@ -19,8 +19,10 @@ async function marcarComoEntregado(tenantId, pedidoId, usuarioId = null) {
   }
 
   // Verificar que el pedido esté en un estado válido para ser entregado
-  if (pedido.estado !== 'en_camino') {
-    throw new Error(`El pedido debe estar en estado "en_camino" para ser marcado como entregado. Estado actual: ${pedido.estado}`);
+  // Permitir confirmación desde estados: despachado, recogiendo, en_camino
+  const estadosValidos = ['despachado', 'recogiendo', 'en_camino'];
+  if (!estadosValidos.includes(pedido.estado)) {
+    throw new Error(`El pedido debe estar en estado "despachado", "recogiendo" o "en_camino" para ser marcado como entregado. Estado actual: ${pedido.estado}`);
   }
 
   const fecha = getTimestamp();
@@ -115,17 +117,18 @@ async function handleHttpInvocation(event) {
 }
 
 async function handleEventBridgeInvocation(event) {
-  const detail = event.detail || event;
-  const tenantId = detail.tenant_id;
-  const pedidoId = detail.pedido_id;
-
-  if (!tenantId || !pedidoId) {
-    console.warn('clienteRecibeComida sin tenant/pedido');
-    return { status: 'missing-data' };
-  }
-
-  const resultado = await marcarComoEntregado(tenantId, pedidoId);
-  return resultado;
+  // IMPORTANTE: Este handler NO debe ejecutarse automáticamente por EventBridge
+  // Solo debe ejecutarse cuando el cliente confirma explícitamente vía HTTP
+  // Si se recibe un evento de EventBridge, solo loguear y no hacer nada
+  console.warn('[WARN] clienteRecibeComida recibió evento de EventBridge, pero NO debe ejecutarse automáticamente. Solo se ejecuta cuando el cliente confirma vía HTTP.');
+  console.warn('[WARN] Evento recibido:', JSON.stringify(event));
+  
+  // NO marcar como entregado automáticamente
+  // Retornar sin hacer nada para evitar marcar pedidos como entregados sin confirmación del cliente
+  return { 
+    status: 'ignored', 
+    message: 'clienteRecibeComida solo se ejecuta cuando el cliente confirma explícitamente vía HTTP' 
+  };
 }
 
 exports.handler = async (event) => {

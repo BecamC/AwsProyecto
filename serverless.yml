@@ -458,12 +458,14 @@ functions:
               - x-tenant-id
               - X-Tenant-Id
             allowCredentials: false
-      - eventBridge:
-          pattern:
-            source:
-              - stepfunctions.workflow
-            detail-type:
-              - Cliente Recibe Comida
+      # REMOVIDO: EventBridge automático para evitar marcar pedidos como entregados sin confirmación del cliente
+      # El cliente debe confirmar explícitamente vía HTTP POST /pedido/confirmar-recepcion
+      # - eventBridge:
+      #     pattern:
+      #       source:
+      #         - stepfunctions.workflow
+      #       detail-type:
+      #         - Cliente Recibe Comida
 
   # ASIGNACIONES
   asignarTrabajador:
