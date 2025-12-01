@@ -592,6 +592,32 @@ functions:
           rate: rate(5 minutes)
           enabled: true
 
+  consultarKPIs:
+    handler: handlers/kpis/consultarKPIs.handler
+    events:
+      - http:
+          path: kpis/consultar
+          method: get
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - x-tenant-id
+              - X-Tenant-Id
+            allowCredentials: false
+      - http:
+          path: kpis/consultar
+          method: options
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - x-tenant-id
+              - X-Tenant-Id
+            allowCredentials: false
+
 resources:
   Resources:
     TablaProductos:
