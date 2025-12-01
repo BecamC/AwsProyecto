@@ -135,33 +135,59 @@ exports.handler = async (event) => {
     // Staff puede ver pedidos según su tier
     const isAdmin = payload.staff_tier === 'admin';
     
-    // Si es admin, puede ver pedidos de todas las sedes
+    // Si es admin, verificar si es admin general o admin por sede
     if (isAdmin) {
-      const sedes = ['pardo_miraflores', 'pardo_surco'];
-      let todosLosPedidos = [];
+      // Si el admin tiene tenant_id_sede, solo ve pedidos de su sede
+      // Si no tiene tenant_id_sede o es null, es admin general y ve todas las sedes
+      const adminTenantId = payload.tenant_id_sede;
       
-      // Consultar pedidos de todas las sedes
-      for (const sede of sedes) {
+      if (adminTenantId) {
+        // Admin por sede: solo ve pedidos de su sede
         const tenantQuery = {
           TableName: TABLA_PEDIDOS,
           KeyConditionExpression: 'tenant_id = :tenant_id',
           ExpressionAttributeValues: {
-            ':tenant_id': sede,
+            ':tenant_id': adminTenantId,
           },
         };
         
         const result = await query(tenantQuery);
-        if (result.Items && result.Items.length > 0) {
-          todosLosPedidos = todosLosPedidos.concat(result.Items);
+        const pedidos = result.Items || [];
+        
+        return response(200, { 
+          pedidos: pedidos,
+          total: pedidos.length,
+          sede_consultada: adminTenantId,
+          nota: `Admin de sede ${adminTenantId} - Solo ve pedidos de su sede`
+        });
+      } else {
+        // Admin general: ve pedidos de todas las sedes
+        const sedes = ['pardo_miraflores', 'pardo_surco'];
+        let todosLosPedidos = [];
+        
+        // Consultar pedidos de todas las sedes
+        for (const sede of sedes) {
+          const tenantQuery = {
+            TableName: TABLA_PEDIDOS,
+            KeyConditionExpression: 'tenant_id = :tenant_id',
+            ExpressionAttributeValues: {
+              ':tenant_id': sede,
+            },
+          };
+          
+          const result = await query(tenantQuery);
+          if (result.Items && result.Items.length > 0) {
+            todosLosPedidos = todosLosPedidos.concat(result.Items);
+          }
         }
+        
+        return response(200, { 
+          pedidos: todosLosPedidos,
+          total: todosLosPedidos.length,
+          sedes_consultadas: sedes,
+          nota: 'Admin general - Puede ver pedidos de todas las sedes'
+        });
       }
-      
-      return response(200, { 
-        pedidos: todosLosPedidos,
-        total: todosLosPedidos.length,
-        sedes_consultadas: sedes,
-        nota: 'Admin puede ver pedidos de todas las sedes'
-      });
     }
     
     // Si es trabajador, solo ve pedidos de su sede asignados a él
