@@ -435,6 +435,35 @@ functions:
 
   clienteRecibeComida:
     handler: handlers/workflow/clienteRecibeComida.handler
+    events:
+      - http:
+          path: pedido/confirmar-recepcion
+          method: post
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - x-tenant-id
+              - X-Tenant-Id
+            allowCredentials: false
+      - http:
+          path: pedido/confirmar-recepcion
+          method: options
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - x-tenant-id
+              - X-Tenant-Id
+            allowCredentials: false
+      - eventBridge:
+          pattern:
+            source:
+              - stepfunctions.workflow
+            detail-type:
+              - Cliente Recibe Comida
 
   # ASIGNACIONES
   asignarTrabajador:
