@@ -491,7 +491,6 @@ functions:
               - Authorization
               - x-tenant-id
               - X-Tenant-Id
-            allowCredentials: false
               - x-user-id
               - x-user-role
             allowCredentials: false
