@@ -571,6 +571,36 @@ functions:
               - x-user-id
               - x-user-role
             allowCredentials: false
+
+  obtenerMetricasTiempos:
+    handler: handlers/estados/obtenerMetricasTiempos.handler
+    events:
+      - http:
+          path: estados/metricas-tiempos
+          method: get
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - x-tenant-id
+              - X-Tenant-Id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
+      - http:
+          path: estados/metricas-tiempos
+          method: options
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - x-tenant-id
+              - X-Tenant-Id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
       - http:
           path: estados/obtener
           method: options

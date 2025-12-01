@@ -166,7 +166,24 @@ async function calcularKPIsParaTenant(tenantId) {
       numero_pedidos: 0,
       ingresos_dia: 0,
       ticket_promedio: 0,
-      top_productos: []
+      top_productos: [],
+      estados_pedidos: {
+        completados: 0,
+        cancelados: 0,
+        pendientes: 0,
+        preparando: 0,
+        despachando: 0,
+        en_camino: 0,
+        entregado: 0,
+        rechazado: 0
+      },
+      tasa_exito: 0,
+      ingresos_por_hora: Array.from({ length: 24 }, (_, i) => ({
+        hora: i,
+        hora_formato: `${String(i).padStart(2, '0')}:00`,
+        ingresos: 0
+      })),
+      metodos_pago: []
     };
 
     if (TABLA_KPIS) {
@@ -190,6 +207,85 @@ async function calcularKPIsParaTenant(tenantId) {
   let topProductos = calcularTopProductos(pedidos);
   topProductos = await obtenerNombresProductos(topProductos, tenantId);
 
+  // Calcular métricas de estado de pedidos
+  const estadosPedidos = {
+    completados: 0,
+    cancelados: 0,
+    pendientes: 0,
+    preparando: 0,
+    despachando: 0,
+    en_camino: 0,
+    entregado: 0,
+    rechazado: 0
+  };
+
+  pedidos.forEach(pedido => {
+    const estado = pedido.estado || 'pendiente';
+    if (estadosPedidos.hasOwnProperty(estado)) {
+      estadosPedidos[estado]++;
+    }
+    if (estado === 'entregado') {
+      estadosPedidos.completados++;
+    }
+  });
+
+  const totalConEstado = Object.values(estadosPedidos).reduce((sum, val) => sum + val, 0);
+  const tasaExito = totalConEstado > 0 ? (estadosPedidos.completados / totalConEstado) * 100 : 0;
+
+  // Calcular ingresos por hora
+  const ingresosPorHora = {};
+  for (let i = 0; i < 24; i++) {
+    ingresosPorHora[i] = 0;
+  }
+
+  pedidos.forEach(pedido => {
+    if (pedido.fecha_inicio) {
+      const fecha = new Date(pedido.fecha_inicio);
+      const hora = fecha.getHours();
+      const precio = pedido.precio_total || 0;
+      ingresosPorHora[hora] = (ingresosPorHora[hora] || 0) + Number(precio);
+    }
+  });
+
+  const ingresosPorHoraArray = Object.keys(ingresosPorHora).map(hora => ({
+    hora: parseInt(hora),
+    hora_formato: `${String(hora).padStart(2, '0')}:00`,
+    ingresos: Number(ingresosPorHora[hora].toFixed(2))
+  }));
+
+  // Calcular distribución por método de pago
+  const metodosPago = {};
+  pedidos.forEach(pedido => {
+    const metodo = pedido.medio_pago || 'no_especificado';
+    const precio = pedido.precio_total || 0;
+    
+    if (!metodosPago[metodo]) {
+      metodosPago[metodo] = {
+        metodo: metodo,
+        cantidad: 0,
+        ingresos: 0
+      };
+    }
+    
+    metodosPago[metodo].cantidad++;
+    metodosPago[metodo].ingresos += Number(precio);
+  });
+
+  const metodosPagoArray = Object.values(metodosPago).map(m => ({
+    metodo: m.metodo,
+    cantidad: m.cantidad,
+    ingresos: Number(m.ingresos.toFixed(2)),
+    porcentaje_cantidad: numeroPedidos > 0 ? Number(((m.cantidad / numeroPedidos) * 100).toFixed(2)) : 0,
+    porcentaje_ingresos: ingresosDia > 0 ? Number(((m.ingresos / ingresosDia) * 100).toFixed(2)) : 0
+  }));
+
+  // Calcular top productos (ya existe, pero lo mantenemos)
+  const topProductosArray = topProductos.map(p => ({
+    product_id: p.product_id,
+    nombre: p.nombre,
+    cantidad_vendida: p.cantidad_total
+  }));
+
   const kpi = {
     kpi_id: generateUUID(),
     tenant_id: tenantId,
@@ -198,11 +294,12 @@ async function calcularKPIsParaTenant(tenantId) {
     numero_pedidos: numeroPedidos,
     ingresos_dia: Number(ingresosDia.toFixed(2)),
     ticket_promedio: Number(ticketPromedio.toFixed(2)),
-    top_productos: topProductos.map(p => ({
-      product_id: p.product_id,
-      nombre: p.nombre,
-      cantidad_vendida: p.cantidad_total
-    }))
+    top_productos: topProductosArray,
+    // Nuevas métricas
+    estados_pedidos: estadosPedidos,
+    tasa_exito: Number(tasaExito.toFixed(2)),
+    ingresos_por_hora: ingresosPorHoraArray,
+    metodos_pago: metodosPagoArray
   };
 
   if (TABLA_KPIS) {

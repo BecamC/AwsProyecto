@@ -59,6 +59,23 @@ exports.handler = async (event) => {
         ingresos_dia: 0,
         ticket_promedio: 0,
         top_productos: [],
+        estados_pedidos: {
+          completados: 0,
+          cancelados: 0,
+          pendientes: 0,
+          preparando: 0,
+          despachando: 0,
+          en_camino: 0,
+          entregado: 0,
+          rechazado: 0
+        },
+        tasa_exito: 0,
+        ingresos_por_hora: Array.from({ length: 24 }, (_, i) => ({
+          hora: i,
+          hora_formato: `${String(i).padStart(2, '0')}:00`,
+          ingresos: 0
+        })),
+        metodos_pago: [],
         message: 'No hay KPIs calculados para esta fecha'
       });
     }
@@ -69,7 +86,20 @@ exports.handler = async (event) => {
       numero_pedidos: kpi.numero_pedidos || 0,
       ingresos_dia: kpi.ingresos_dia || 0,
       ticket_promedio: kpi.ticket_promedio || 0,
-      top_productos: kpi.top_productos || []
+      top_productos: kpi.top_productos || [],
+      estados_pedidos: kpi.estados_pedidos || {
+        completados: 0,
+        cancelados: 0,
+        pendientes: 0,
+        preparando: 0,
+        despachando: 0,
+        en_camino: 0,
+        entregado: 0,
+        rechazado: 0
+      },
+      tasa_exito: kpi.tasa_exito || 0,
+      ingresos_por_hora: kpi.ingresos_por_hora || [],
+      metodos_pago: kpi.metodos_pago || []
     });
   } catch (error) {
     console.error('Error consultando KPIs:', error);

@@ -93,6 +93,9 @@ exports.handler = async (event) => {
         usuario_id: item.usuario_id,
         usuario_tipo: item.usuario_tipo,
         motivo: item.motivo,
+        start_time: item.start_time,
+        end_time: item.end_time,
+        duracion_segundos: item.duracion_segundos,
       }));
     }
 
