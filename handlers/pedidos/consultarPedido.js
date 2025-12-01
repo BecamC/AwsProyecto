@@ -137,11 +137,12 @@ exports.handler = async (event) => {
     
     // Si es admin, verificar si es admin general o admin por sede
     if (isAdmin) {
-      // Si el admin tiene tenant_id_sede, solo ve pedidos de su sede
+      // Si el admin tiene tenant_id_sede (y no es null), solo ve pedidos de su sede
       // Si no tiene tenant_id_sede o es null, es admin general y ve todas las sedes
       const adminTenantId = payload.tenant_id_sede;
       
-      if (adminTenantId) {
+      // Si adminTenantId es null o undefined, es admin general
+      if (adminTenantId && adminTenantId !== 'GENERAL') {
         // Admin por sede: solo ve pedidos de su sede
         const tenantQuery = {
           TableName: TABLA_PEDIDOS,

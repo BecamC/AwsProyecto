@@ -65,36 +65,37 @@ exports.handler = async (event) => {
     
     if (frontend_type === 'staff') {
       // Para staff, intentar buscar primero con el tenant_id_sede enviado
-      // Si no se encuentra y se envió un tenant_id_sede, intentar con null (admin general)
+      // Si no se encuentra y se envió un tenant_id_sede, intentar con "GENERAL" (admin general)
+      // NOTA: DynamoDB no permite null en claves primarias, usamos "GENERAL" para admin general
       tableName = TABLA_STAFF;
       
-      // Normalizar tenant_id_sede: convertir string "null" a null real
+      // Normalizar tenant_id_sede: convertir null/undefined/empty a "GENERAL" para admin general
       const tenantIdNormalizado = (tenant_id_sede === null || tenant_id_sede === 'null' || tenant_id_sede === undefined || tenant_id_sede === '') 
-        ? null 
+        ? 'GENERAL' 
         : tenant_id_sede;
       
-      if (tenantIdNormalizado) {
+      if (tenantIdNormalizado === 'GENERAL') {
+        // Buscar admin general con tenant_id_sede = "GENERAL"
+        console.log('Buscando admin general con tenant_id_sede=GENERAL');
+        user = await getItem(TABLA_STAFF, {
+          tenant_id_sede: 'GENERAL',
+          email: emailLower
+        });
+      } else {
         // Intentar buscar con el tenant_id_sede enviado
         user = await getItem(TABLA_STAFF, {
           tenant_id_sede: tenantIdNormalizado,
           email: emailLower
         });
         
-        // Si no se encuentra, intentar con null (admin general)
+        // Si no se encuentra, intentar con "GENERAL" (admin general)
         if (!user) {
-          console.log(`Usuario no encontrado con tenant_id_sede=${tenantIdNormalizado}, intentando con null (admin general)`);
+          console.log(`Usuario no encontrado con tenant_id_sede=${tenantIdNormalizado}, intentando con GENERAL (admin general)`);
           user = await getItem(TABLA_STAFF, {
-            tenant_id_sede: null,
+            tenant_id_sede: 'GENERAL',
             email: emailLower
           });
         }
-      } else {
-        // Si no se envió tenant_id_sede o es null, buscar directamente con null (admin general)
-        console.log('Buscando admin general con tenant_id_sede=null');
-        user = await getItem(TABLA_STAFF, {
-          tenant_id_sede: null,
-          email: emailLower
-        });
       }
     } else {
       user = await getItem(TABLA_CLIENTES, {
@@ -137,19 +138,22 @@ exports.handler = async (event) => {
     // Actualizar last_login
     // Usar el tenant_id_sede del usuario encontrado, no el enviado en el body
     const key = frontend_type === 'staff' 
-      ? { tenant_id_sede: user.tenant_id_sede || null, email: emailLower }
+      ? { tenant_id_sede: user.tenant_id_sede || 'GENERAL', email: emailLower }
       : { email: emailLower };
     
     await updateLastLogin(tableName, key);
     
     // Generar token JWT
+    // Convertir "GENERAL" a null en el token para mantener compatibilidad
+    const tenantIdForToken = (user.tenant_id_sede === 'GENERAL' || !user.tenant_id_sede) ? null : user.tenant_id_sede;
+    
     const tokenData = {
       user_id: user.user_id,
       email: user.email,
       user_type: userType,
       staff_tier: user.staff_tier || null,
       permissions: user.permissions || [],
-      tenant_id_sede: user.tenant_id_sede || null
+      tenant_id_sede: tenantIdForToken
     };
     
     const token = generateToken(tokenData);
@@ -167,7 +171,8 @@ exports.handler = async (event) => {
     if (userType === 'staff') {
       userData.staff_tier = user.staff_tier;
       userData.permissions = user.permissions;
-      userData.tenant_id_sede = user.tenant_id_sede;
+      // Convertir "GENERAL" a null en la respuesta para mantener compatibilidad
+      userData.tenant_id_sede = (user.tenant_id_sede === 'GENERAL' || !user.tenant_id_sede) ? null : user.tenant_id_sede;
     }
     
     // Respuesta
