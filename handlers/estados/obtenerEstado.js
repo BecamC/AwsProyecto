@@ -7,6 +7,16 @@ const TABLA_ESTADOS = process.env.TABLA_ESTADOS;
 
 exports.handler = async (event) => {
   try {
+    // Manejar preflight OPTIONS request
+    if (event.httpMethod === 'OPTIONS') {
+      const { CORS_HEADERS } = require('../../shared/auth');
+      return {
+        statusCode: 200,
+        headers: CORS_HEADERS,
+        body: ''
+      };
+    }
+    
     const auth = requireAuth(event);
     if (auth.error) {
       return auth.error;

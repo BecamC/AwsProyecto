@@ -3,6 +3,15 @@ const { getTimestamp } = require('../../shared/dynamodb');
 
 exports.handler = async (event) => {
   try {
+    // Manejar preflight OPTIONS request
+    if (event.httpMethod === 'OPTIONS') {
+      return {
+        statusCode: 200,
+        headers: CORS_HEADERS,
+        body: ''
+      };
+    }
+    
     console.log('Evento de logout recibido');
     
     const currentTime = getTimestamp();
