@@ -362,6 +362,13 @@ async function calcularKPIsGlobalesParaTenant(tenantId) {
   let topProductos = calcularTopProductos(pedidos);
   topProductos = await obtenerNombresProductos(topProductos, tenantId);
   
+  // Mapear cantidad_total a cantidad_vendida (igual que en calcularKPIsParaTenant)
+  const topProductosArray = topProductos.map(p => ({
+    product_id: p.product_id,
+    nombre: p.nombre,
+    cantidad_vendida: p.cantidad_total || 0
+  }));
+  
   // Calcular métricas de estado de pedidos
   const estadosPedidos = {
     completados: 0,
@@ -439,7 +446,7 @@ async function calcularKPIsGlobalesParaTenant(tenantId) {
     numero_pedidos: numeroPedidos,
     ingresos_dia: Number(ingresosDia.toFixed(2)),
     ticket_promedio: Number(ticketPromedio.toFixed(2)),
-    top_productos: topProductos,
+    top_productos: topProductosArray,
     estados_pedidos: estadosPedidos,
     tasa_exito: Number(tasaExito.toFixed(2)),
     ingresos_por_hora: ingresosPorHoraArray,

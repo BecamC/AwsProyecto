@@ -198,7 +198,9 @@ exports.handler = async (event) => {
               cantidad_vendida: 0
             };
           }
-          productosMap[productId].cantidad_vendida += producto.cantidad_vendida || 0;
+          // Manejar tanto cantidad_vendida como cantidad_total (para compatibilidad)
+          const cantidad = producto.cantidad_vendida || producto.cantidad_total || 0;
+          productosMap[productId].cantidad_vendida += cantidad;
         });
       }
 
