@@ -122,19 +122,30 @@ exports.handler = async (event) => {
       });
     }
 
-    // Si NO se proporciona fecha, agregar todos los KPIs históricos
-    const kpisQuery = {
-      TableName: TABLA_KPIS,
-      KeyConditionExpression: 'tenant_id = :tenant_id',
-      ExpressionAttributeValues: {
-        ':tenant_id': tenantId
-      }
-    };
+    // Si NO se proporciona fecha, buscar primero el KPI global (fecha: 'GLOBAL')
+    let kpiData = await getItem(TABLA_KPIS, {
+      tenant_id: tenantId,
+      fecha: 'GLOBAL'
+    });
 
-    const kpisResult = await query(kpisQuery);
-    const todosLosKPIs = kpisResult.Items || [];
+    // Si no hay un KPI 'GLOBAL' precalculado, agregarlos manualmente
+    if (!kpiData) {
+      console.log('No se encontró KPI GLOBAL, agregando KPIs diarios...');
+      const kpisQuery = {
+        TableName: TABLA_KPIS,
+        KeyConditionExpression: 'tenant_id = :tenant_id',
+        ExpressionAttributeValues: {
+          ':tenant_id': tenantId
+        }
+      };
 
-    if (todosLosKPIs.length === 0) {
+      const kpisResult = await query(kpisQuery);
+      const todosLosKPIs = kpisResult.Items || [];
+
+      // Filtrar solo los KPIs diarios (excluir 'GLOBAL')
+      const dailyKpis = todosLosKPIs.filter(k => k.fecha !== 'GLOBAL');
+
+      if (dailyKpis.length === 0) {
       return response(200, {
         tenant_id: tenantId,
         fecha: null,
@@ -176,7 +187,7 @@ exports.handler = async (event) => {
     const ingresosPorHora = Array(24).fill(0);
     const metodosPagoMap = {};
 
-    todosLosKPIs.forEach(kpi => {
+      dailyKpis.forEach(kpi => {
       totalPedidos += kpi.numero_pedidos || 0;
       totalIngresos += kpi.ingresos_dia || 0;
 
@@ -265,17 +276,55 @@ exports.handler = async (event) => {
       ingresos: Number(ingreso.toFixed(2))
     }));
 
+      return response(200, {
+        tenant_id: tenantId,
+        fecha: null, // null indica que es agregado global
+        numero_pedidos: totalPedidos,
+        ingresos_dia: Number(totalIngresos.toFixed(2)),
+        ticket_promedio: Number(ticketPromedio.toFixed(2)),
+        top_productos: topProductos,
+        estados_pedidos: estadosAgregados,
+        tasa_exito: Number(tasaExito.toFixed(2)),
+        ingresos_por_hora: ingresosPorHoraFormateado,
+        metodos_pago: metodosPagoArray
+      });
+    }
+
+    // Si existe el KPI global, usarlo directamente
+    console.log('Usando KPI GLOBAL precalculado');
+    const ingresosPorHoraFormateado = (() => {
+      if (kpiData.ingresos_por_hora && Array.isArray(kpiData.ingresos_por_hora)) {
+        if (kpiData.ingresos_por_hora.length > 0 && typeof kpiData.ingresos_por_hora[0] === 'object') {
+          return kpiData.ingresos_por_hora;
+        } else {
+          return kpiData.ingresos_por_hora.map((ingreso, hora) => ({
+            hora: hora,
+            hora_formato: `${String(hora).padStart(2, '0')}:00`,
+            ingresos: Number(ingreso) || 0
+          }));
+        }
+      }
+      return Array.from({ length: 24 }, (_, i) => ({
+        hora: i,
+        hora_formato: `${String(i).padStart(2, '0')}:00`,
+        ingresos: 0
+      }));
+    })();
+
     return response(200, {
-      tenant_id: tenantId,
+      tenant_id: kpiData.tenant_id,
       fecha: null, // null indica que es agregado global
-      numero_pedidos: totalPedidos,
-      ingresos_dia: Number(totalIngresos.toFixed(2)),
-      ticket_promedio: Number(ticketPromedio.toFixed(2)),
-      top_productos: topProductos,
-      estados_pedidos: estadosAgregados,
-      tasa_exito: Number(tasaExito.toFixed(2)),
+      numero_pedidos: kpiData.numero_pedidos || 0,
+      ingresos_dia: kpiData.ingresos_dia || 0,
+      ticket_promedio: kpiData.ticket_promedio || 0,
+      top_productos: kpiData.top_productos || [],
+      estados_pedidos: kpiData.estados_pedidos || {
+        completados: 0, cancelados: 0, pendientes: 0, preparando: 0,
+        despachando: 0, en_camino: 0, entregado: 0, rechazado: 0,
+      },
+      tasa_exito: kpiData.tasa_exito || 0,
       ingresos_por_hora: ingresosPorHoraFormateado,
-      metodos_pago: metodosPagoArray
+      metodos_pago: kpiData.metodos_pago || [],
     });
   } catch (error) {
     console.error('Error consultando KPIs:', error);
