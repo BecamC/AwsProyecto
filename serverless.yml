@@ -362,7 +362,6 @@ functions:
               - x-tenant-id
               - X-Tenant-Id
               - x-user-id
-            allowCredentials: false
               - x-user-role
             allowCredentials: false
 
@@ -392,7 +391,6 @@ functions:
               - x-tenant-id
               - X-Tenant-Id
               - x-user-id
-            allowCredentials: false
               - x-user-role
             allowCredentials: false
 
@@ -432,7 +430,6 @@ functions:
               - x-tenant-id
               - X-Tenant-Id
               - x-user-id
-            allowCredentials: false
               - x-user-role
             allowCredentials: false
 
