@@ -843,11 +843,6 @@ resources:
                         "tenant_id.$": "$.tenant_id"
                       }
                     },
-                    "Next": "ClienteRecibeComida"
-                  },
-                  "ClienteRecibeComida": {
-                    "Type": "Task",
-                    "Resource": "${ClienteRecibeComidaArn}",
                     "End": true
                   }
                 }
