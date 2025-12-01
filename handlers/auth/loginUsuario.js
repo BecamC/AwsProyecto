@@ -64,15 +64,38 @@ exports.handler = async (event) => {
     let tableName;
     
     if (frontend_type === 'staff') {
-      if (!tenant_id_sede) {
-        return response(400, { message: 'tenant_id_sede es requerido para staff' });
-      }
-      
-      user = await getItem(TABLA_STAFF, {
-        tenant_id_sede,
-        email: emailLower
-      });
+      // Para staff, intentar buscar primero con el tenant_id_sede enviado
+      // Si no se encuentra y se envió un tenant_id_sede, intentar con null (admin general)
       tableName = TABLA_STAFF;
+      
+      // Normalizar tenant_id_sede: convertir string "null" a null real
+      const tenantIdNormalizado = (tenant_id_sede === null || tenant_id_sede === 'null' || tenant_id_sede === undefined || tenant_id_sede === '') 
+        ? null 
+        : tenant_id_sede;
+      
+      if (tenantIdNormalizado) {
+        // Intentar buscar con el tenant_id_sede enviado
+        user = await getItem(TABLA_STAFF, {
+          tenant_id_sede: tenantIdNormalizado,
+          email: emailLower
+        });
+        
+        // Si no se encuentra, intentar con null (admin general)
+        if (!user) {
+          console.log(`Usuario no encontrado con tenant_id_sede=${tenantIdNormalizado}, intentando con null (admin general)`);
+          user = await getItem(TABLA_STAFF, {
+            tenant_id_sede: null,
+            email: emailLower
+          });
+        }
+      } else {
+        // Si no se envió tenant_id_sede o es null, buscar directamente con null (admin general)
+        console.log('Buscando admin general con tenant_id_sede=null');
+        user = await getItem(TABLA_STAFF, {
+          tenant_id_sede: null,
+          email: emailLower
+        });
+      }
     } else {
       user = await getItem(TABLA_CLIENTES, {
         email: emailLower
@@ -112,8 +135,9 @@ exports.handler = async (event) => {
     }
     
     // Actualizar last_login
+    // Usar el tenant_id_sede del usuario encontrado, no el enviado en el body
     const key = frontend_type === 'staff' 
-      ? { tenant_id_sede, email: emailLower }
+      ? { tenant_id_sede: user.tenant_id_sede || null, email: emailLower }
       : { email: emailLower };
     
     await updateLastLogin(tableName, key);
