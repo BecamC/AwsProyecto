@@ -19,8 +19,12 @@ exports.handler = async (event) => {
       return response(400, { message: 'x-tenant-id header es requerido' });
     }
 
-    // Verificar que el staff pertenezca a la misma sede
-    if (payload.tenant_id_sede !== tenantId) {
+    // Verificar permisos: admin general puede consultar trabajadores de cualquier sede
+    // Admin por sede y trabajadores solo pueden consultar trabajadores de su propia sede
+    const isAdminGeneral = payload.staff_tier === 'admin' && (!payload.tenant_id_sede || payload.tenant_id_sede === 'GENERAL');
+    const userTenantId = payload.tenant_id_sede;
+    
+    if (!isAdminGeneral && userTenantId !== tenantId) {
       return response(403, { message: 'No tienes permiso para consultar trabajadores de esta sede' });
     }
 
