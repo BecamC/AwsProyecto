@@ -47,18 +47,39 @@ async function handleHttpInvocation(event) {
   }
 
   const pedido = await getItem(TABLA_PEDIDOS, { tenant_id: tenantId, pedido_id: pedidoId });
-  if (!pedido || !pedido.delivery_task_token) {
-    return response(409, { message: 'No hay recogida pendiente' });
+  
+  if (!pedido) {
+    return response(404, { message: 'Pedido no encontrado' });
   }
 
-  await sendTaskSuccess({
-    taskToken: pedido.delivery_task_token,
-    output: {
-      tenant_id: tenantId,
-      pedido_id: pedidoId,
-      estado: 'en_camino',
-    },
-  });
+  // Validar que el pedido esté en un estado válido para recogida
+  const estadosValidos = ['despachado', 'recogiendo'];
+  if (!estadosValidos.includes(pedido.estado)) {
+    return response(409, { 
+      message: `El pedido debe estar en estado "despachado" o "recogiendo" para confirmar recogida. Estado actual: ${pedido.estado}`,
+      estado_actual: pedido.estado
+    });
+  }
+
+  // Si hay delivery_task_token, enviar sendTaskSuccess a Step Functions
+  if (pedido.delivery_task_token) {
+    try {
+      await sendTaskSuccess({
+        taskToken: pedido.delivery_task_token,
+        output: {
+          tenant_id: tenantId,
+          pedido_id: pedidoId,
+          estado: 'en_camino',
+        },
+      });
+      console.log('[INFO] sendTaskSuccess enviado a Step Functions');
+    } catch (error) {
+      console.warn('[WARN] Error enviando sendTaskSuccess, continuando de todas formas:', error.message);
+      // Continuar aunque falle sendTaskSuccess, para no bloquear el flujo
+    }
+  } else {
+    console.log('[INFO] No hay delivery_task_token, actualizando estado directamente (flujo manual)');
+  }
 
   const fecha = getTimestamp();
   const updated = await updateItem({
@@ -78,11 +99,11 @@ async function handleHttpInvocation(event) {
   await registrarCambioEstado({
     pedido_id: pedidoId,
     tenant_id: tenantId,
-    estado_anterior: pedido.estado, // recogiendo
+    estado_anterior: pedido.estado, // despachado o recogiendo
     estado_nuevo: 'en_camino',
     usuario_id: motorizadoId,
     usuario_tipo: 'staff',
-    motivo: 'Motorizado confirma recogida del pedido',
+    motivo: `Motorizado confirma recogida del pedido (estado anterior: ${pedido.estado})`,
     start_time: pedido.fecha_actualizacion || pedido.fecha_inicio,
     end_time: fecha,
   });
