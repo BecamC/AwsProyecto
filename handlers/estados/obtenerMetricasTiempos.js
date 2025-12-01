@@ -36,26 +36,40 @@ exports.handler = async (event) => {
       return response(400, { message: 'tenant_id es requerido' });
     }
 
-    // Si no se proporciona fecha, usar la fecha actual
-    const fechaConsulta = fecha || new Date().toISOString().split('T')[0];
-    const fechaInicio = `${fechaConsulta}T00:00:00.000Z`;
-    const fechaFin = `${fechaConsulta}T23:59:59.999Z`;
-
-    // Consultar todos los cambios de estado del día usando el GSI tenant_id-index
-    const estadosQuery = {
-      TableName: TABLA_ESTADOS,
-      IndexName: 'tenant_id-index',
-      KeyConditionExpression: 'tenant_id = :tenant_id AND #ts BETWEEN :fechaInicio AND :fechaFin',
-      ExpressionAttributeNames: {
-        '#ts': 'timestamp'
-      },
-      ExpressionAttributeValues: {
-        ':tenant_id': tenantId,
-        ':fechaInicio': fechaInicio,
-        ':fechaFin': fechaFin,
-      },
-      ScanIndexForward: true,
-    };
+    // Construir query según si hay fecha o no
+    let estadosQuery;
+    
+    if (fecha) {
+      // Si se proporciona fecha, consultar solo ese día
+      const fechaInicio = `${fecha}T00:00:00.000Z`;
+      const fechaFin = `${fecha}T23:59:59.999Z`;
+      
+      estadosQuery = {
+        TableName: TABLA_ESTADOS,
+        IndexName: 'tenant_id-index',
+        KeyConditionExpression: 'tenant_id = :tenant_id AND #ts BETWEEN :fechaInicio AND :fechaFin',
+        ExpressionAttributeNames: {
+          '#ts': 'timestamp'
+        },
+        ExpressionAttributeValues: {
+          ':tenant_id': tenantId,
+          ':fechaInicio': fechaInicio,
+          ':fechaFin': fechaFin,
+        },
+        ScanIndexForward: true,
+      };
+    } else {
+      // Si NO se proporciona fecha, consultar todos los estados históricos
+      estadosQuery = {
+        TableName: TABLA_ESTADOS,
+        IndexName: 'tenant_id-index',
+        KeyConditionExpression: 'tenant_id = :tenant_id',
+        ExpressionAttributeValues: {
+          ':tenant_id': tenantId,
+        },
+        ScanIndexForward: true,
+      };
+    }
 
     const estadosResult = await query(estadosQuery);
     const estados = estadosResult.Items || [];
@@ -238,7 +252,7 @@ exports.handler = async (event) => {
 
     return response(200, {
       tenant_id: tenantId,
-      fecha: fechaConsulta,
+      fecha: fecha || null, // null indica datos globales
       resumen: {
         total_pedidos_analizados: tiemposTotalesPorPedido.length,
         tiempo_promedio_total_segundos: Math.round(tiempoPromedioTotal),
