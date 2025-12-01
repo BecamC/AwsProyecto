@@ -117,17 +117,25 @@ async function handleHttpInvocation(event) {
 }
 
 async function handleEventBridgeInvocation(event) {
-  // IMPORTANTE: Este handler NO debe ejecutarse automáticamente por EventBridge
-  // Solo debe ejecutarse cuando el cliente confirma explícitamente vía HTTP
-  // Si se recibe un evento de EventBridge, solo loguear y no hacer nada
-  console.warn('[WARN] clienteRecibeComida recibió evento de EventBridge, pero NO debe ejecutarse automáticamente. Solo se ejecuta cuando el cliente confirma vía HTTP.');
-  console.warn('[WARN] Evento recibido:', JSON.stringify(event));
+  // Manejar invocación desde Step Functions o EventBridge
+  // Step Functions invoca directamente con el payload en el evento
+  // EventBridge envía el payload en event.detail
+  const payload = event.detail || event;
+  const tenantId = payload.tenant_id;
+  const pedidoId = payload.pedido_id;
+
+  if (!tenantId || !pedidoId) {
+    console.warn('clienteRecibeComida: falta tenant_id o pedido_id en el evento');
+    return { status: 'error', message: 'tenant_id y pedido_id son requeridos' };
+  }
+
+  // Marcar como entregado automáticamente cuando Step Functions completa el flujo
+  const resultado = await marcarComoEntregado(tenantId, pedidoId, null);
   
-  // NO marcar como entregado automáticamente
-  // Retornar sin hacer nada para evitar marcar pedidos como entregados sin confirmación del cliente
-  return { 
-    status: 'ignored', 
-    message: 'clienteRecibeComida solo se ejecuta cuando el cliente confirma explícitamente vía HTTP' 
+  return {
+    status: 'completed',
+    pedido_id: pedidoId,
+    fecha_fin: resultado.fecha_fin,
   };
 }
 

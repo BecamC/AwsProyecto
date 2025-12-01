@@ -458,14 +458,12 @@ functions:
               - x-tenant-id
               - X-Tenant-Id
             allowCredentials: false
-      # REMOVIDO: EventBridge automático para evitar marcar pedidos como entregados sin confirmación del cliente
-      # El cliente debe confirmar explícitamente vía HTTP POST /pedido/confirmar-recepcion
-      # - eventBridge:
-      #     pattern:
-      #       source:
-      #         - stepfunctions.workflow
-      #       detail-type:
-      #         - Cliente Recibe Comida
+      - eventBridge:
+          pattern:
+            source:
+              - stepfunctions.workflow
+            detail-type:
+              - Cliente Recibe Comida
 
   # ASIGNACIONES
   asignarTrabajador:
@@ -897,6 +895,18 @@ resources:
                       "FunctionName": "${PedidoRecogidoArn}",
                       "Payload": {
                         "taskToken.$": "$$.Task.Token",
+                        "pedido_id.$": "$.pedido_id",
+                        "tenant_id.$": "$.tenant_id"
+                      }
+                    },
+                    "Next": "ClienteRecibeComida"
+                  },
+                  "ClienteRecibeComida": {
+                    "Type": "Task",
+                    "Resource": "arn:aws:states:::lambda:invoke",
+                    "Parameters": {
+                      "FunctionName": "${ClienteRecibeComidaArn}",
+                      "Payload": {
                         "pedido_id.$": "$.pedido_id",
                         "tenant_id.$": "$.tenant_id"
                       }
