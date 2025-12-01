@@ -68,7 +68,11 @@ exports.handler = async (event) => {
             rechazado: 0
           },
           tasa_exito: 0,
-          ingresos_por_hora: Array(24).fill(0),
+          ingresos_por_hora: Array.from({ length: 24 }, (_, i) => ({
+            hora: i,
+            hora_formato: `${String(i).padStart(2, '0')}:00`,
+            ingresos: 0
+          })),
           metodos_pago: [],
           message: 'No hay KPIs calculados para esta fecha'
         });
@@ -92,7 +96,28 @@ exports.handler = async (event) => {
           rechazado: 0
         },
         tasa_exito: kpi.tasa_exito || 0,
-        ingresos_por_hora: kpi.ingresos_por_hora || Array(24).fill(0),
+        ingresos_por_hora: (() => {
+          // Formatear ingresos_por_hora si viene como array de números
+          if (kpi.ingresos_por_hora && Array.isArray(kpi.ingresos_por_hora)) {
+            // Verificar si ya está formateado como objetos
+            if (kpi.ingresos_por_hora.length > 0 && typeof kpi.ingresos_por_hora[0] === 'object') {
+              return kpi.ingresos_por_hora;
+            } else {
+              // Si es array de números, formatearlo
+              return kpi.ingresos_por_hora.map((ingreso, hora) => ({
+                hora: hora,
+                hora_formato: `${String(hora).padStart(2, '0')}:00`,
+                ingresos: Number(ingreso) || 0
+              }));
+            }
+          }
+          // Si no hay datos, crear array vacío con 24 horas
+          return Array.from({ length: 24 }, (_, i) => ({
+            hora: i,
+            hora_formato: `${String(i).padStart(2, '0')}:00`,
+            ingresos: 0
+          }));
+        })(),
         metodos_pago: kpi.metodos_pago || []
       });
     }
@@ -178,10 +203,22 @@ exports.handler = async (event) => {
       }
 
       // Agregar ingresos por hora
+      // Puede venir como array de números o array de objetos
       if (kpi.ingresos_por_hora && Array.isArray(kpi.ingresos_por_hora)) {
-        kpi.ingresos_por_hora.forEach((ingreso, hora) => {
+        kpi.ingresos_por_hora.forEach((item, index) => {
+          const hora = index;
+          let ingreso = 0;
+          
+          // Si es un objeto, extraer el valor de ingresos
+          if (typeof item === 'object' && item !== null) {
+            ingreso = Number(item.ingresos || item) || 0;
+          } else {
+            // Si es un número directo
+            ingreso = Number(item) || 0;
+          }
+          
           if (hora >= 0 && hora < 24) {
-            ingresosPorHora[hora] += Number(ingreso) || 0;
+            ingresosPorHora[hora] += ingreso;
           }
         });
       }
@@ -219,6 +256,13 @@ exports.handler = async (event) => {
     const ticketPromedio = totalPedidos > 0 ? totalIngresos / totalPedidos : 0;
     const tasaExito = totalPedidos > 0 ? (estadosAgregados.completados / totalPedidos) * 100 : 0;
 
+    // Formatear ingresos_por_hora como array de objetos para el frontend
+    const ingresosPorHoraFormateado = ingresosPorHora.map((ingreso, hora) => ({
+      hora: hora,
+      hora_formato: `${String(hora).padStart(2, '0')}:00`,
+      ingresos: Number(ingreso.toFixed(2))
+    }));
+
     return response(200, {
       tenant_id: tenantId,
       fecha: null, // null indica que es agregado global
@@ -228,7 +272,7 @@ exports.handler = async (event) => {
       top_productos: topProductos,
       estados_pedidos: estadosAgregados,
       tasa_exito: Number(tasaExito.toFixed(2)),
-      ingresos_por_hora: ingresosPorHora.map(ing => Number(ing.toFixed(2))),
+      ingresos_por_hora: ingresosPorHoraFormateado,
       metodos_pago: metodosPagoArray
     });
   } catch (error) {

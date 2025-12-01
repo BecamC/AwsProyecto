@@ -4,6 +4,48 @@ const { isUUID } = require('../../shared/validations');
 const { requireAuth } = require('../../shared/auth');
 
 const TABLA_PEDIDOS = process.env.TABLA_PEDIDOS;
+const TABLA_PRODUCTOS = process.env.TABLA_PRODUCTOS;
+
+// Función para enriquecer productos con nombres
+async function obtenerNombresProductos(productos, tenantId) {
+  if (!productos || productos.length === 0) {
+    return [];
+  }
+
+  const productosConNombres = await Promise.all(productos.map(async (producto) => {
+    try {
+      // Si ya tiene nombre, mantenerlo
+      if (producto.nombre || producto.nombre_producto) {
+        return {
+          ...producto,
+          nombre: producto.nombre || producto.nombre_producto,
+          nombre_producto: producto.nombre_producto || producto.nombre
+        };
+      }
+      
+      // Si no tiene nombre, buscarlo en la tabla de productos
+      const productoDetalle = await getItem(TABLA_PRODUCTOS, {
+        tenant_id: tenantId,
+        producto_id: producto.product_id || producto.producto_id
+      });
+      
+      return {
+        ...producto,
+        nombre: productoDetalle?.nombre_producto || 'Producto sin nombre',
+        nombre_producto: productoDetalle?.nombre_producto || 'Producto sin nombre'
+      };
+    } catch (error) {
+      console.error(`Error obteniendo nombre del producto ${producto.product_id || producto.producto_id}:`, error);
+      return {
+        ...producto,
+        nombre: 'Producto no encontrado',
+        nombre_producto: 'Producto no encontrado'
+      };
+    }
+  }));
+  
+  return productosConNombres;
+}
 
 exports.handler = async (event) => {
   try {
@@ -85,7 +127,17 @@ exports.handler = async (event) => {
         }
       }
       
-      return response(200, { pedido });
+      // Enriquecer productos con nombres
+      let pedidoConProductos = pedido;
+      if (pedido.productos && pedido.productos.length > 0) {
+        const productosConNombres = await obtenerNombresProductos(pedido.productos, pedido.tenant_id);
+        pedidoConProductos = {
+          ...pedido,
+          productos: productosConNombres
+        };
+      }
+      
+      return response(200, { pedido: pedidoConProductos });
     }
 
     if (params.usuario_id) {
@@ -121,7 +173,19 @@ exports.handler = async (event) => {
         pedidos = pedidos.filter(p => p.tenant_id === params.tenant_id);
       }
       
-      return response(200, { pedidos });
+      // Enriquecer productos con nombres
+      const pedidosConProductos = await Promise.all(pedidos.map(async (pedido) => {
+        if (pedido.productos && pedido.productos.length > 0) {
+          const productosConNombres = await obtenerNombresProductos(pedido.productos, pedido.tenant_id);
+          return {
+            ...pedido,
+            productos: productosConNombres
+          };
+        }
+        return pedido;
+      }));
+      
+      return response(200, { pedidos: pedidosConProductos });
     }
 
     // Consulta sin parámetros específicos
@@ -139,7 +203,19 @@ exports.handler = async (event) => {
       const result = await query(queryParams);
       const pedidos = result.Items || [];
       
-      return response(200, { pedidos });
+      // Enriquecer productos con nombres
+      const pedidosConProductos = await Promise.all(pedidos.map(async (pedido) => {
+        if (pedido.productos && pedido.productos.length > 0) {
+          const productosConNombres = await obtenerNombresProductos(pedido.productos, pedido.tenant_id);
+          return {
+            ...pedido,
+            productos: productosConNombres
+          };
+        }
+        return pedido;
+      }));
+      
+      return response(200, { pedidos: pedidosConProductos });
     }
     
     // Staff puede ver pedidos según su tier
@@ -163,11 +239,23 @@ exports.handler = async (event) => {
         };
         
         const result = await query(tenantQuery);
-        const pedidos = result.Items || [];
+        let pedidos = result.Items || [];
+        
+        // Enriquecer productos con nombres
+        const pedidosConProductos = await Promise.all(pedidos.map(async (pedido) => {
+          if (pedido.productos && pedido.productos.length > 0) {
+            const productosConNombres = await obtenerNombresProductos(pedido.productos, pedido.tenant_id);
+            return {
+              ...pedido,
+              productos: productosConNombres
+            };
+          }
+          return pedido;
+        }));
         
         return response(200, { 
-          pedidos: pedidos,
-          total: pedidos.length,
+          pedidos: pedidosConProductos,
+          total: pedidosConProductos.length,
           sede_consultada: adminTenantId,
           nota: `Admin de sede ${adminTenantId} - Solo ve pedidos de su sede`
         });
@@ -192,9 +280,21 @@ exports.handler = async (event) => {
           }
         }
         
+        // Enriquecer productos con nombres
+        const pedidosConProductos = await Promise.all(todosLosPedidos.map(async (pedido) => {
+          if (pedido.productos && pedido.productos.length > 0) {
+            const productosConNombres = await obtenerNombresProductos(pedido.productos, pedido.tenant_id);
+            return {
+              ...pedido,
+              productos: productosConNombres
+            };
+          }
+          return pedido;
+        }));
+        
         return response(200, { 
-          pedidos: todosLosPedidos,
-          total: todosLosPedidos.length,
+          pedidos: pedidosConProductos,
+          total: pedidosConProductos.length,
           sedes_consultadas: sedes,
           nota: 'Admin general - Puede ver pedidos de todas las sedes'
         });
@@ -219,9 +319,21 @@ exports.handler = async (event) => {
       p.motorizado_id === authenticatedUserId
     );
     
+    // Enriquecer productos con nombres
+    const pedidosConProductos = await Promise.all(pedidos.map(async (pedido) => {
+      if (pedido.productos && pedido.productos.length > 0) {
+        const productosConNombres = await obtenerNombresProductos(pedido.productos, pedido.tenant_id);
+        return {
+          ...pedido,
+          productos: productosConNombres
+        };
+      }
+      return pedido;
+    }));
+    
     return response(200, { 
-      pedidos,
-      total: pedidos.length,
+      pedidos: pedidosConProductos,
+      total: pedidosConProductos.length,
       sede: tenantId,
       nota: 'Trabajador solo ve pedidos asignados de su sede'
     });

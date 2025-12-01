@@ -310,6 +310,151 @@ async function calcularKPIsParaTenant(tenantId) {
   return kpi;
 }
 
+async function obtenerTodosLosTenants() {
+  const scanParams = {
+    TableName: TABLA_PEDIDOS,
+    ProjectionExpression: 'tenant_id'
+  };
+  
+  const result = await scan(scanParams);
+  const tenants = new Set();
+  
+  (result || []).forEach(item => {
+    if (item.tenant_id) {
+      tenants.add(item.tenant_id);
+    }
+  });
+  
+  return Array.from(tenants);
+}
+
+async function calcularKPIsGlobalesParaTenant(tenantId) {
+  console.log(`Calculando KPIs GLOBALES para tenant: ${tenantId}`);
+  
+  // Obtener TODOS los pedidos del tenant (sin filtrar por fecha)
+  const pedidosQuery = {
+    TableName: TABLA_PEDIDOS,
+    KeyConditionExpression: 'tenant_id = :tenant_id',
+    ExpressionAttributeValues: {
+      ':tenant_id': tenantId
+    }
+  };
+  
+  const pedidosResult = await query(pedidosQuery);
+  const pedidos = pedidosResult.Items || [];
+  
+  console.log(`Pedidos totales encontrados para ${tenantId}: ${pedidos.length}`);
+  
+  if (pedidos.length === 0) {
+    console.log(`No hay pedidos para ${tenantId}, retornando KPIs vacíos`);
+    return null; // No crear KPI global vacío
+  }
+  
+  // Calcular métricas globales (igual que calcularKPIsParaTenant pero sin filtrar por fecha)
+  const numeroPedidos = pedidos.length;
+  const ingresosDia = pedidos.reduce((total, pedido) => {
+    const precio = pedido.precio_total || 0;
+    return total + Number(precio);
+  }, 0);
+  
+  const ticketPromedio = numeroPedidos > 0 ? ingresosDia / numeroPedidos : 0;
+  
+  let topProductos = calcularTopProductos(pedidos);
+  topProductos = await obtenerNombresProductos(topProductos, tenantId);
+  
+  // Calcular métricas de estado de pedidos
+  const estadosPedidos = {
+    completados: 0,
+    cancelados: 0,
+    pendientes: 0,
+    preparando: 0,
+    despachando: 0,
+    en_camino: 0,
+    entregado: 0,
+    rechazado: 0
+  };
+  
+  pedidos.forEach(pedido => {
+    const estado = pedido.estado || 'pendiente';
+    if (estadosPedidos.hasOwnProperty(estado)) {
+      estadosPedidos[estado]++;
+    }
+    if (estado === 'entregado') {
+      estadosPedidos.completados++;
+    }
+  });
+  
+  const totalConEstado = Object.values(estadosPedidos).reduce((sum, val) => sum + val, 0);
+  const tasaExito = totalConEstado > 0 ? (estadosPedidos.completados / totalConEstado) * 100 : 0;
+  
+  // Calcular ingresos por hora (de todos los pedidos históricos)
+  const ingresosPorHora = Array(24).fill(0);
+  pedidos.forEach(pedido => {
+    if (pedido.fecha_inicio) {
+      const fecha = new Date(pedido.fecha_inicio);
+      const hora = fecha.getHours();
+      const precio = pedido.precio_total || 0;
+      ingresosPorHora[hora] += Number(precio);
+    }
+  });
+  
+  const ingresosPorHoraArray = ingresosPorHora.map((ingreso, hora) => ({
+    hora: hora,
+    hora_formato: `${String(hora).padStart(2, '0')}:00`,
+    ingresos: Number(ingreso.toFixed(2))
+  }));
+  
+  // Calcular distribución por método de pago
+  const metodosPago = {};
+  pedidos.forEach(pedido => {
+    const metodo = pedido.medio_pago || 'no_especificado';
+    const precio = pedido.precio_total || 0;
+    
+    if (!metodosPago[metodo]) {
+      metodosPago[metodo] = {
+        metodo: metodo,
+        cantidad: 0,
+        ingresos: 0
+      };
+    }
+    
+    metodosPago[metodo].cantidad++;
+    metodosPago[metodo].ingresos += Number(precio);
+  });
+  
+  const metodosPagoArray = Object.values(metodosPago).map(m => ({
+    metodo: m.metodo,
+    cantidad: m.cantidad,
+    ingresos: Number(m.ingresos.toFixed(2)),
+    porcentaje_cantidad: numeroPedidos > 0 ? Number(((m.cantidad / numeroPedidos) * 100).toFixed(2)) : 0,
+    porcentaje_ingresos: ingresosDia > 0 ? Number(((m.ingresos / ingresosDia) * 100).toFixed(2)) : 0
+  }));
+  
+  const fechaHora = getTimestamp();
+  const kpiGlobal = {
+    kpi_id: generateUUID(),
+    tenant_id: tenantId,
+    fecha: 'GLOBAL', // Marcar como global
+    timestamp: fechaHora,
+    numero_pedidos: numeroPedidos,
+    ingresos_dia: Number(ingresosDia.toFixed(2)),
+    ticket_promedio: Number(ticketPromedio.toFixed(2)),
+    top_productos: topProductos,
+    estados_pedidos: estadosPedidos,
+    tasa_exito: Number(tasaExito.toFixed(2)),
+    ingresos_por_hora: ingresosPorHoraArray,
+    metodos_pago: metodosPagoArray
+  };
+  
+  // Guardar KPI global (usando fecha: 'GLOBAL' como clave)
+  if (TABLA_KPIS) {
+    await putItem(TABLA_KPIS, kpiGlobal);
+    console.log('KPIs GLOBALES guardados en tabla');
+  }
+  
+  return kpiGlobal;
+}
+
 exports.handler = async (event) => {
   try {
     console.log('Evento recibido:', JSON.stringify(event));
@@ -317,42 +462,64 @@ exports.handler = async (event) => {
     const tenantId = event.tenant_id || event.detail?.tenant_id;
     
     if (tenantId) {
-      const kpi = await calcularKPIsParaTenant(tenantId);
+      // Calcular KPIs del día y globales para un tenant específico
+      const kpiDia = await calcularKPIsParaTenant(tenantId);
+      const kpiGlobal = await calcularKPIsGlobalesParaTenant(tenantId);
       return {
         statusCode: 200,
         body: JSON.stringify({
           message: 'KPIs calculados exitosamente',
           tenant_id: tenantId,
-          kpis: kpi
+          kpis_dia: kpiDia,
+          kpis_global: kpiGlobal
         })
       };
     }
     
-    const tenants = await obtenerTenantsDelDia();
-    console.log(`Tenants encontrados del día: ${tenants.length}`);
+    // Si no hay tenant específico, calcular para todos los tenants del día Y globales
+    const tenantsDelDia = await obtenerTenantsDelDia();
+    const todosLosTenants = await obtenerTodosLosTenants();
     
-    if (tenants.length === 0) {
-      return {
-        statusCode: 200,
-        body: JSON.stringify({
-          message: 'No hay tenants con pedidos del día',
-          kpis: []
-        })
-      };
-    }
+    console.log(`Tenants encontrados del día: ${tenantsDelDia.length}`);
+    console.log(`Tenants totales encontrados: ${todosLosTenants.length}`);
     
     const resultados = [];
-    for (const tenant of tenants) {
+    
+    // Calcular KPIs del día para tenants con pedidos del día
+    for (const tenant of tenantsDelDia) {
       try {
         const kpi = await calcularKPIsParaTenant(tenant);
         resultados.push({
           tenant_id: tenant,
+          tipo: 'dia',
           kpis: kpi
         });
       } catch (error) {
-        console.error(`Error calculando KPIs para tenant ${tenant}:`, error);
+        console.error(`Error calculando KPIs del día para tenant ${tenant}:`, error);
         resultados.push({
           tenant_id: tenant,
+          tipo: 'dia',
+          error: error.message
+        });
+      }
+    }
+    
+    // Calcular KPIs globales para todos los tenants
+    for (const tenant of todosLosTenants) {
+      try {
+        const kpiGlobal = await calcularKPIsGlobalesParaTenant(tenant);
+        if (kpiGlobal) {
+          resultados.push({
+            tenant_id: tenant,
+            tipo: 'global',
+            kpis: kpiGlobal
+          });
+        }
+      } catch (error) {
+        console.error(`Error calculando KPIs globales para tenant ${tenant}:`, error);
+        resultados.push({
+          tenant_id: tenant,
+          tipo: 'global',
           error: error.message
         });
       }
@@ -361,8 +528,9 @@ exports.handler = async (event) => {
     return {
       statusCode: 200,
       body: JSON.stringify({
-        message: 'KPIs calculados para todos los tenants',
-        total_tenants: tenants.length,
+        message: 'KPIs calculados para todos los tenants (día y globales)',
+        total_tenants_dia: tenantsDelDia.length,
+        total_tenants_global: todosLosTenants.length,
         resultados: resultados
       })
     };
