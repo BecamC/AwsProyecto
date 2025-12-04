@@ -3,6 +3,8 @@ const { response } = require('../../shared/response');
 const { requireStaff } = require('../../shared/auth');
 
 const TABLA_INVENTARIO = process.env.TABLA_INVENTARIO;
+const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 100;
 
 exports.handler = async (event) => {
   try {
@@ -52,13 +54,19 @@ exports.handler = async (event) => {
     // Permitir filtro opcional desde el body
     const body = JSON.parse(event.body || '{}');
     const productoId = body.producto_id;
+    
+    // Paginación
+    const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(body.limit) || DEFAULT_LIMIT));
+    const cursor = body.cursor; // Cursor opcional para paginación
 
     let inventario = [];
+    let hasMore = false;
+    let lastEvaluatedKey = null;
     const { getItem } = require('../../shared/dynamodb');
     const TABLA_PRODUCTOS = process.env.TABLA_PRODUCTOS;
 
     if (productoId) {
-      // Consultar un producto específico en las sedes permitidas
+      // Consultar un producto específico en las sedes permitidas (sin paginación)
       for (const sede of sedesAConsultar) {
         const item = await getItem(TABLA_INVENTARIO, {
           tenant_id: sede,
@@ -69,17 +77,34 @@ exports.handler = async (event) => {
         }
       }
     } else {
-      // Consultar todos los productos de las sedes permitidas
+      // Consultar todos los productos de las sedes permitidas con paginación
       for (const sede of sedesAConsultar) {
-        const result = await query({
+        const dynamoParams = {
           TableName: TABLA_INVENTARIO,
           KeyConditionExpression: 'tenant_id = :tenant_id',
           ExpressionAttributeValues: {
             ':tenant_id': sede
+          },
+          Limit: limit,
+        };
+        
+        // Si hay cursor, usarlo para continuar desde donde quedó (solo en la primera sede)
+        if (cursor && sede === sedesAConsultar[0]) {
+          try {
+            dynamoParams.ExclusiveStartKey = JSON.parse(decodeURIComponent(cursor));
+          } catch (e) {
+            return response(400, { message: 'Cursor inválido' });
           }
-        });
+        }
+        
+        const result = await query(dynamoParams);
         if (result.Items && result.Items.length > 0) {
           inventario = inventario.concat(result.Items);
+        }
+        
+        if (result.LastEvaluatedKey) {
+          hasMore = true;
+          lastEvaluatedKey = result.LastEvaluatedKey;
         }
       }
     }
@@ -98,7 +123,19 @@ exports.handler = async (event) => {
       };
     }));
 
-    return response(200, { inventario: inventarioConNombres });
+    // Construir respuesta con metadatos de paginación
+    const responseData = {
+      inventario: inventarioConNombres,
+      pagination: {
+        limit,
+        has_more: hasMore && !productoId, // Solo si no es búsqueda por producto específico
+        next_cursor: hasMore && lastEvaluatedKey && !productoId
+          ? encodeURIComponent(JSON.stringify(lastEvaluatedKey))
+          : null,
+      },
+    };
+
+    return response(200, responseData);
   } catch (error) {
     console.error('Error consultando inventario', error);
     return response(500, { message: 'Error interno al consultar inventario' });

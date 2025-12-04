@@ -1,0 +1,150 @@
+% ==============================================================
+\section{Diseño del Modelo de Datos y Esquema Multi-Tenant}
+% ==============================================================
+
+La solución utiliza un modelo completamente serverless basado en Amazon DynamoDB. 
+A diferencia de bases de datos relacionales, DynamoDB no requiere un esquema fijo: 
+cada ítem puede tener atributos distintos y evolucionar con el tiempo.
+
+Todas las tablas principales utilizan \texttt{tenant\_id} como \textbf{Partition Key (HASH)}, 
+donde \texttt{tenant\_id} representa la sede del restaurante (por ejemplo, 
+\texttt{pardo\_miraflores} o \texttt{pardo\_surco}). Este diseño garantiza el aislamiento 
+lógico entre sedes y permite consultas eficientes, ya que DynamoDB distribuye los datos 
+físicamente por partición, agrupando automáticamente los datos de cada sede.
+
+Cada entidad define una clave primaria compuesta por:
+
+\begin{itemize}
+    \item \textbf{PK (Partition Key / HASH):} \texttt{tenant\_id} en las tablas principales, 
+    identifica la sede del restaurante y garantiza el aislamiento multi-tenant.
+    \item \textbf{SK (Sort Key / RANGE):} identifica de forma única el recurso dentro 
+    de la sede y permite ordenar elementos relacionados dentro de la misma partición.
+\end{itemize}
+
+Este modelo flexible permite almacenar diferentes etapas del pedido, movimientos de 
+inventario y logs sin modificar la estructura base de las tablas.
+
+% ==============================================================
+\subsection{Tablas Principales}
+% ==============================================================
+
+A continuación se presenta la estructura real implementada. El uso de \texttt{tenant\_id} 
+(sede) como Partition Key es fundamental para el aislamiento y rendimiento del sistema.
+
+\subsubsection*{TablaProductos}
+\begin{itemize}
+    \item \textbf{PK (HASH):} \texttt{tenant\_id} - Identifica la sede del restaurante
+    \item \textbf{SK (RANGE):} \texttt{producto\_id}
+    \item \textbf{Atributos:} nombre\_producto, descripción, precio\_producto, 
+    tipo, tipo\_producto, imagen\_url, is\_active, fecha\_creacion, fecha\_actualizacion
+    \item \textbf{Nota:} Cada sede mantiene su catálogo de productos. Productos compartidos 
+    entre sedes (mismo \texttt{producto\_id}) se almacenan con diferentes \texttt{tenant\_id}.
+\end{itemize}
+
+\subsubsection*{TablaPedidos}
+\begin{itemize}
+    \item \textbf{PK (HASH):} \texttt{tenant\_id} - Identifica la sede del restaurante
+    \item \textbf{SK (RANGE):} \texttt{pedido\_id}
+    \item \textbf{GSI:} \texttt{user\_id-index} (user\_id HASH, fecha\_inicio RANGE)
+    \item \textbf{Atributos:} user\_id, productos (array), precio\_total, estado, 
+    direccion\_entrega, telefono, fecha\_inicio, fecha\_actualizacion, chef\_id, motorizado\_id
+    \item \textbf{Nota:} Los pedidos están agrupados por sede mediante \texttt{tenant\_id}. 
+    El GSI permite consultar pedidos por usuario de forma eficiente.
+\end{itemize}
+
+\subsubsection*{TablaInventario}
+\begin{itemize}
+    \item \textbf{PK (HASH):} \texttt{tenant\_id} - Identifica la sede del restaurante
+    \item \textbf{SK (RANGE):} \texttt{producto\_id}
+    \item \textbf{Atributos:} stock\_actual, stock\_minimo, stock\_maximo, 
+    ultima\_actualizacion, created\_for\_common\_product, migrated\_from
+    \item \textbf{Nota:} Cada sede mantiene su inventario independiente. Un mismo 
+    \texttt{producto\_id} puede existir en múltiples sedes con niveles de stock diferentes.
+\end{itemize}
+
+\subsubsection*{TablaEstados}
+\begin{itemize}
+    \item \textbf{PK (HASH):} \texttt{pedido\_id}
+    \item \textbf{SK (RANGE):} \texttt{timestamp}
+    \item \textbf{GSI:} \texttt{tenant\_id-index} (tenant\_id HASH, timestamp RANGE)
+    \item \textbf{Atributos:} tenant\_id, estado\_anterior, estado\_nuevo, 
+    responsable\_id, duracion\_segundos, motivo
+    \item \textbf{Nota:} El GSI \texttt{tenant\_id-index} permite consultar todos los 
+    cambios de estado de una sede específica, manteniendo el aislamiento multi-tenant.
+\end{itemize}
+
+\subsubsection*{TablaKPIs}
+\begin{itemize}
+    \item \textbf{PK (HASH):} \texttt{tenant\_id} - Identifica la sede del restaurante
+    \item \textbf{SK (RANGE):} \texttt{fecha} (formato ISO: YYYY-MM-DD o 'GLOBAL')
+    \item \textbf{GSI:} \texttt{fecha-index} (fecha HASH, timestamp RANGE)
+    \item \textbf{Atributos:} numero\_pedidos, ingresos\_dia, ticket\_promedio, 
+    top\_productos, estados\_pedidos, tasa\_exito, ingresos\_por\_hora, metodos\_pago, timestamp
+    \item \textbf{Nota:} Los KPIs se calculan y almacenan por sede. La fecha 'GLOBAL' 
+    almacena métricas agregadas de todos los tiempos para una sede.
+\end{itemize}
+
+\subsubsection*{TablaLogs}
+\begin{itemize}
+    \item \textbf{PK (HASH):} \texttt{log\_id}
+    \item \textbf{GSI:} \texttt{user\_id-index} (user\_id HASH, horario RANGE)
+    \item \textbf{Atributos:} user\_id, tenant\_id, action\_type, pedido\_id, 
+    resultado, detalles, horario
+    \item \textbf{Nota:} El atributo \texttt{tenant\_id} permite filtrar logs por sede. 
+    El GSI facilita consultas por usuario.
+\end{itemize}
+
+\subsubsection*{TablaClientes}
+\begin{itemize}
+    \item \textbf{PK (HASH):} \texttt{email}
+    \item \textbf{Atributos:} user\_id, nombre, apellido, telefono, direccion, 
+    password\_hash, fecha\_registro, last\_login
+    \item \textbf{Nota:} Los clientes no están vinculados a una sede específica 
+    ya que pueden realizar pedidos en cualquier sede. El email es único globalmente.
+\end{itemize}
+
+\subsubsection*{TablaStaff}
+\begin{itemize}
+    \item \textbf{PK (HASH):} \texttt{tenant\_id\_sede} - Identifica la sede del trabajador
+    \item \textbf{SK (RANGE):} \texttt{email}
+    \item \textbf{Atributos:} user\_id, nombre, staff\_tier (admin/trabajador), 
+    permissions (array), fecha\_registro, last\_login
+    \item \textbf{Nota:} Cada trabajador pertenece a una sede específica. Un admin 
+    general tiene \texttt{tenant\_id\_sede = null} o 'GENERAL' y puede acceder a todas las sedes.
+\end{itemize}
+
+\subsubsection*{TablaInvitationCodes}
+\begin{itemize}
+    \item \textbf{PK (HASH):} \texttt{code}
+    \item \textbf{Atributos:} tenant\_id\_sede, staff\_tier, ttl (Time To Live)
+    \item \textbf{Nota:} Códigos de invitación temporales con TTL habilitado para 
+    expiración automática. Vinculados a una sede específica mediante \texttt{tenant\_id\_sede}.
+\end{itemize}
+
+% ==============================================================
+\subsection{Consideraciones de Diseño Multi-Tenant}
+% ==============================================================
+
+El uso de \texttt{tenant\_id} (sede) como Partition Key en las tablas principales 
+garantiza que:
+
+\begin{enumerate}
+    \item \textbf{Aislamiento lógico:} Cada sede solo puede acceder a sus propios datos 
+    mediante consultas que incluyen su \texttt{tenant\_id}.
+    
+    \item \textbf{Distribución física:} DynamoDB agrupa los datos de cada sede en la 
+    misma partición, mejorando el rendimiento de consultas.
+    
+    \item \textbf{Escalabilidad:} Cada sede puede crecer independientemente sin afectar 
+    el rendimiento de otras.
+    
+    \item \textbf{Seguridad:} Los handlers validan que el \texttt{tenant\_id} del usuario 
+    coincida con el de los datos consultados, previniendo acceso no autorizado entre sedes.
+    
+    \item \textbf{SuperAdmin:} Los administradores generales con \texttt{tenant\_id\_sede = null} 
+    o 'GENERAL' pueden consultar múltiples particiones (todas las sedes) mediante 
+    consultas iterativas.
+\end{enumerate}
+
+Este diseño garantiza que cada sede opere de forma independiente mientras comparten 
+la misma infraestructura.
