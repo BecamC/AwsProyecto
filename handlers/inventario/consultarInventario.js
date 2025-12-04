@@ -6,6 +6,16 @@ const TABLA_INVENTARIO = process.env.TABLA_INVENTARIO;
 
 exports.handler = async (event) => {
   try {
+    // Manejar preflight OPTIONS request
+    if (event.httpMethod === 'OPTIONS') {
+      const { CORS_HEADERS } = require('../../shared/auth');
+      return {
+        statusCode: 200,
+        headers: CORS_HEADERS,
+        body: ''
+      };
+    }
+
     // Verificar que sea staff (solo staff puede consultar inventario)
     const auth = requireStaff(event);
     if (auth.error) {

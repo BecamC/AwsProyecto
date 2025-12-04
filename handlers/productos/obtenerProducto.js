@@ -6,6 +6,16 @@ const TABLA_PRODUCTOS = process.env.TABLA_PRODUCTOS;
 
 exports.handler = async (event) => {
   try {
+    // Manejar preflight OPTIONS request
+    if (event.httpMethod === 'OPTIONS') {
+      const { CORS_HEADERS } = require('../../shared/auth');
+      return {
+        statusCode: 200,
+        headers: CORS_HEADERS,
+        body: ''
+      };
+    }
+
     const tenantId = event.headers?.['x-tenant-id'] || event.headers?.['X-Tenant-Id'];
     const productoId = event.pathParameters?.producto_id;
 

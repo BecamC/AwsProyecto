@@ -148,7 +148,22 @@ functions:
             origin: '*'
             headers:
               - Content-Type
+              - Authorization
               - x-tenant-id
+              - X-Tenant-Id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
+      - http:
+          path: producto/obtener
+          method: options
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - x-tenant-id
+              - X-Tenant-Id
               - x-user-id
               - x-user-role
             allowCredentials: false
@@ -163,7 +178,22 @@ functions:
             origin: '*'
             headers:
               - Content-Type
+              - Authorization
               - x-tenant-id
+              - X-Tenant-Id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
+      - http:
+          path: producto/{producto_id}
+          method: options
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - x-tenant-id
+              - X-Tenant-Id
               - x-user-id
               - x-user-role
             allowCredentials: false
@@ -178,7 +208,22 @@ functions:
             origin: '*'
             headers:
               - Content-Type
+              - Authorization
               - x-tenant-id
+              - X-Tenant-Id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
+      - http:
+          path: producto
+          method: options
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - x-tenant-id
+              - X-Tenant-Id
               - x-user-id
               - x-user-role
             allowCredentials: false
@@ -193,7 +238,22 @@ functions:
             origin: '*'
             headers:
               - Content-Type
+              - Authorization
               - x-tenant-id
+              - X-Tenant-Id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
+      - http:
+          path: producto/{producto_id}
+          method: options
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - x-tenant-id
+              - X-Tenant-Id
               - x-user-id
               - x-user-role
             allowCredentials: false
@@ -208,7 +268,22 @@ functions:
             origin: '*'
             headers:
               - Content-Type
+              - Authorization
               - x-tenant-id
+              - X-Tenant-Id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
+      - http:
+          path: producto/{producto_id}
+          method: options
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - x-tenant-id
+              - X-Tenant-Id
               - x-user-id
               - x-user-role
             allowCredentials: false
@@ -320,7 +395,22 @@ functions:
             origin: '*'
             headers:
               - Content-Type
+              - Authorization
               - x-tenant-id
+              - X-Tenant-Id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
+      - http:
+          path: inventario/consultar
+          method: options
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - x-tenant-id
+              - X-Tenant-Id
               - x-user-id
               - x-user-role
             allowCredentials: false
@@ -335,7 +425,22 @@ functions:
             origin: '*'
             headers:
               - Content-Type
+              - Authorization
               - x-tenant-id
+              - X-Tenant-Id
+              - x-user-id
+              - x-user-role
+            allowCredentials: false
+      - http:
+          path: inventario/ajustar
+          method: options
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - x-tenant-id
+              - X-Tenant-Id
               - x-user-id
               - x-user-role
             allowCredentials: false
