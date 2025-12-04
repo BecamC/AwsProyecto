@@ -61,10 +61,37 @@ exports.handler = async (event) => {
       };
     }
 
-    const tenantId = event.headers?.['x-tenant-id'] || event.headers?.['X-Tenant-Id'];
+    // Verificar autenticación para obtener información del usuario
+    const { requireAuth } = require('../../shared/auth');
+    const authResult = requireAuth(event);
+    let payload = null;
+    let isAdmin = false;
+    let adminTenantId = null;
+    
+    if (!authResult.error) {
+      payload = authResult.payload;
+      isAdmin = payload?.staff_tier === 'admin';
+      adminTenantId = payload?.tenant_id_sede;
+    }
 
-    if (!tenantId) {
-      return response(400, { message: 'x-tenant-id header es requerido' });
+    const tenantId = event.headers?.['x-tenant-id'] || event.headers?.['X-Tenant-Id'];
+    
+    // Determinar sedes a consultar según permisos
+    let sedesAConsultar = [];
+    if (isAdmin && (!adminTenantId || adminTenantId === 'GENERAL')) {
+      // Admin general: puede ver todas las sedes
+      if (tenantId && tenantId !== 'GENERAL') {
+        sedesAConsultar = [tenantId];
+      } else {
+        sedesAConsultar = ['pardo_miraflores', 'pardo_surco'];
+      }
+    } else {
+      // Admin por sede o usuario normal: solo su sede
+      const sedeUsuario = adminTenantId || tenantId;
+      if (!sedeUsuario) {
+        return response(400, { message: 'x-tenant-id header es requerido' });
+      }
+      sedesAConsultar = [sedeUsuario];
     }
 
     // Obtener parámetros de consulta
@@ -81,35 +108,49 @@ exports.handler = async (event) => {
     const sortBy = queryParams.sort_by || queryParams.sortBy;
     const sortOrder = queryParams.sort_order || queryParams.order || 'asc';
 
-    // Construir parámetros de DynamoDB
-    const dynamoParams = {
-      TableName: TABLA_PRODUCTOS,
-      KeyConditionExpression: 'tenant_id = :tenant_id',
-      ExpressionAttributeValues: {
-        ':tenant_id': tenantId,
-      },
-      Limit: limit,
-    };
+    // Consultar productos de todas las sedes permitidas
+    let todosLosProductos = [];
+    let hasMore = false;
+    let lastEvaluatedKey = null;
 
-    // Agregar filtro por tipo_producto si se especifica
-    if (tipoProducto) {
-      dynamoParams.FilterExpression = 'tipo_producto = :tipo_producto';
-      dynamoParams.ExpressionAttributeValues[':tipo_producto'] = tipoProducto;
-    }
+    for (const sede of sedesAConsultar) {
+      const dynamoParams = {
+        TableName: TABLA_PRODUCTOS,
+        KeyConditionExpression: 'tenant_id = :tenant_id',
+        ExpressionAttributeValues: {
+          ':tenant_id': sede,
+        },
+        Limit: limit,
+      };
 
-    // Si hay cursor, usarlo para continuar desde donde quedó
-    if (cursor) {
-      try {
-        dynamoParams.ExclusiveStartKey = JSON.parse(decodeURIComponent(cursor));
-      } catch (e) {
-        return response(400, { message: 'Cursor inválido' });
+      // Agregar filtro por tipo_producto si se especifica
+      if (tipoProducto) {
+        dynamoParams.FilterExpression = 'tipo_producto = :tipo_producto';
+        dynamoParams.ExpressionAttributeValues[':tipo_producto'] = tipoProducto;
+      }
+
+      // Si hay cursor, usarlo para continuar desde donde quedó (solo en la primera sede)
+      if (cursor && sede === sedesAConsultar[0]) {
+        try {
+          dynamoParams.ExclusiveStartKey = JSON.parse(decodeURIComponent(cursor));
+        } catch (e) {
+          return response(400, { message: 'Cursor inválido' });
+        }
+      }
+
+      // Ejecutar consulta
+      const result = await query(dynamoParams);
+      if (result.Items && result.Items.length > 0) {
+        todosLosProductos = todosLosProductos.concat(result.Items);
+      }
+      
+      if (result.LastEvaluatedKey) {
+        hasMore = true;
+        lastEvaluatedKey = result.LastEvaluatedKey;
       }
     }
 
-    // Ejecutar consulta
-    const result = await query(dynamoParams);
-    let productos = result.Items || [];
-    const hasMore = !!result.LastEvaluatedKey;
+    let productos = todosLosProductos;
 
     // Si hay filtro y no se encontraron productos, devolver mensaje apropiado
     if (tipoProducto && productos.length === 0) {
@@ -142,8 +183,8 @@ exports.handler = async (event) => {
       pagination: {
         limit,
         has_more: hasMore,
-        next_cursor: hasMore 
-          ? encodeURIComponent(JSON.stringify(result.LastEvaluatedKey))
+        next_cursor: hasMore && lastEvaluatedKey
+          ? encodeURIComponent(JSON.stringify(lastEvaluatedKey))
           : null,
       },
       filters: {
